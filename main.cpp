@@ -10,8 +10,33 @@
 #include <unordered_map>
 #include <vector>
 
+#include <future>
+#include <thread>
+#include <chrono>
+
 using namespace std;
 using namespace cv;
+
+struct tessData
+{
+    string str;
+    float conf = 0;
+    Rect box;
+    void operator=(const tessData &data)
+    {
+        if (data.conf > conf)
+        {
+            str = data.str;
+            conf = data.conf;
+            box = data.box;
+        }
+    }
+};
+
+struct PersonProperties
+{
+    tessData rank, clan, Union;
+};
 
 BITMAPINFOHEADER createBitmapHeader(int width, int height)
 {
@@ -100,20 +125,25 @@ bool checkIfVertCrosses(const Rect &a, const Rect &b)
     int32_t b_min = b.y;
     int32_t b_max = b.y + b.height;
 
-    cout << a_min << " " << a_max << " " << b_min << " " << b_max << "  " << static_cast<int>((a_min >= b_min && a_min <= b_max) || (a_max >= b_min && a_max <= b_max)) << "\n";
-
     return (a_min <= b_max && b_min <= a_max);
 
     return (a_min >= b_min && a_min <= b_max) ||
            (a_max >= b_min && a_max <= b_max) ||
 
            (b_min >= a_min && b_min <= a_max) ||
-           (b_max >= a_min && b_max <= a_max)
-           ;
+           (b_max >= a_min && b_max <= a_max);
 
     // return !(a_max < b_min || a_min > b_max);
 
     // return (interval1.start >= interval2.start && end1 <= end2);
+}
+
+bool getKey()
+{
+    std::string answer;
+    std::cin >> answer;
+    bool ret = answer == "q";
+    return ret;
 }
 
 int main()
@@ -125,7 +155,7 @@ int main()
     const Rect WindowNameRoi(1553, 52, 1744 - 1553, 131 - 52);   // Corners х1 (1553, 52)  х4 (1744, 131)
     const Rect ServerNameRoi(1055, 260, 1254 - 1055, 306 - 260); // Corners х1 (1011, 179)  х4 (1295, 233)
 
-    const Rect RankingRoiCurrentRank(404, 408, 480 - 404, 796 - 408);
+    const Rect RankingRoiCurrentRank(400, 408, 485 - 400, 796 - 408);
     const Rect RankingRoiName(604, 408, 905 - 604, 796 - 408);
     const Rect RankingRoiClan(1005, 408, 1319 - 1005, 796 - 408);
 
@@ -140,10 +170,11 @@ int main()
     ofstream out_debug("./test.txt");
     ofstream out("./out.csv");
 
-    // Name, Rank, Clan
-    unordered_map<string, pair<string, string>> persons;
+    // Name, Rank, Clan, Alians
+    unordered_map<string, PersonProperties> persons;
+    bool run = true;
 
-    while (true)
+    while (run)
     {
         Mat im = captureScreenMat(hwnd);
         cv::cvtColor(im, im, COLOR_BGR2GRAY);
@@ -154,15 +185,14 @@ int main()
             string serverName = getBoxWord(ocr_eng, im, ServerNameRoi);
             cout << "serverName: " << serverName << "\n";
             {
-                tesseract::TessBaseAPI *ocr = ocr_eng_rus;
                 Mat windowCurrentRanks = im(RankingRoiCurrentRank);
                 Mat windowNames = im(RankingRoiName);
                 Mat windowClans = im(RankingRoiClan);
-                vector<pair<string, Rect>> s_Ranks;
-                vector<pair<string, Rect>> Names;
-                vector<pair<string, Rect>> ClansAlians;
+                vector<tessData> s_Ranks;
+                vector<tessData> Names;
+                vector<tessData> ClansAlians;
 
-                auto handleWindow = [&](string Name, Mat &window, vector<pair<string, Rect>> &save)
+                auto handleWindow = [&](tesseract::TessBaseAPI *ocr, string Name, Mat &window, vector<tessData> &save)
                 {
                     out_debug << Name << "\n";
                     ocr->SetPageSegMode(tesseract::PSM_SINGLE_COLUMN);
@@ -175,49 +205,52 @@ int main()
                     {
                         do
                         {
-                            pair<string, Rect> data;
+                            tessData data;
                             const char *word = ri->GetUTF8Text(level);
-                            float conf = ri->Confidence(level);
-                            // if (conf < 85)
-                                // continue;
                             int x1, y1, x2, y2;
                             ri->BoundingBox(level, &x1, &y1, &x2, &y2);
-                            data.first = string(word);
-                            data.second = Rect(x1, y1, x2 - x1, y2 - y1);
-                            save.push_back(move(data));
+                            data.conf = ri->Confidence(level);
+                            data.str = string(word);
+                            data.box = Rect(x1, y1, x2 - x1, y2 - y1);
+                            out_debug << format("conf: {:10.5f}; BoundingBox: {:5d},{:5d},{:5d},{:5d}; word: '{:30.50s}'\n", data.conf, x1, y1, x2, y2, word) << endl;
+                            if (data.conf > 60)
+                            {
+                                save.push_back(move(data));
+                            }
 
-                            out_debug << format("conf: {:10.5f}; BoundingBox: {:5d},{:5d},{:5d},{:5d}; word: '{:30.50s}'\n", conf, x1, y1, x2, y2, word) << endl;
                             delete[] word;
                         } while (ri->Next(level));
                     }
                 };
 
-                handleWindow("Ranks---------", windowCurrentRanks, s_Ranks);
-                handleWindow("Names---------", windowNames, Names);
-                handleWindow("Clans---------", windowClans, ClansAlians);
+                handleWindow(ocr_eng, "Ranks---------", windowCurrentRanks, s_Ranks);
+                handleWindow(ocr_eng_rus, "Names---------", windowNames, Names);
+                handleWindow(ocr_eng_rus, "Clans---------", windowClans, ClansAlians);
 
                 for (const auto &name : Names)
                 {
-                    auto person = persons.find(name.first);
-                    if (person == persons.end())
+                    for (const auto &rank : s_Ranks)
                     {
-                        for (const auto &rank : s_Ranks)
+                        if (checkIfVertCrosses(name.box, rank.box))
                         {
-                            if (checkIfVertCrosses(name.second, rank.second))
-                            {
-                                persons[name.first].first = rank.first;
-                                break;
-                            }
+                            persons[name.str].rank = rank;
+                            break;
                         }
+                    }
 
-                        for (const auto &clanAli : ClansAlians)
+                    for (const auto &clanAli : ClansAlians)
+                    {
+                        if (checkIfVertCrosses(name.box, clanAli.box))
                         {
-                            if (checkIfVertCrosses(name.second, clanAli.second))
+                            if (persons[name.str].clan.str.length())
                             {
-                                persons[name.first].second += ((persons[name.first].second.length())? ";":"") + clanAli.first;
+                                persons[name.str].Union = clanAli;
+                            }
+                            else
+                            {
+                                persons[name.str].clan = clanAli;
                             }
                         }
-                        out << persons[name.first].first << ";" << name.first << ";" << persons[name.first].second << endl;
                     }
                 }
             }
@@ -237,7 +270,8 @@ int main()
             }
         }
     }
-
+    
+    cout << "stop\n";
     ocr_eng->End();
     ocr_eng_rus->End();
     return 0;
