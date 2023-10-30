@@ -138,12 +138,10 @@ bool checkIfVertCrosses(const Rect &a, const Rect &b)
     // return (interval1.start >= interval2.start && end1 <= end2);
 }
 
-bool getKey()
-{
-    std::string answer;
-    std::cin >> answer;
-    bool ret = answer == "q";
-    return ret;
+char readKeyPress() {
+    char key;
+    std::cin >> key;
+    return key;
 }
 
 int main()
@@ -172,9 +170,10 @@ int main()
 
     // Name, Rank, Clan, Alians
     unordered_map<string, PersonProperties> persons;
-    bool run = true;
 
-    while (run)
+    std::future<char> future_key = std::async(std::launch::async, readKeyPress);
+
+    while (true)
     {
         Mat im = captureScreenMat(hwnd);
         cv::cvtColor(im, im, COLOR_BGR2GRAY);
@@ -269,8 +268,14 @@ int main()
                 imw = false;
             }
         }
+
+        if(future_key.wait_for(chrono::system_clock::duration::min()) == future_status::ready)
+        {
+            cout << future_key.get() << "\n";
+            break;
+        }
     }
-    
+
     cout << "stop\n";
     ocr_eng->End();
     ocr_eng_rus->End();
