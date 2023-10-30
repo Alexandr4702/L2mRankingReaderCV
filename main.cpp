@@ -206,12 +206,17 @@ int main()
                         {
                             tessData data;
                             const char *word = ri->GetUTF8Text(level);
+                            if (word == nullptr)
+                            {
+                                cout << "NullData \n";
+                                continue;
+                            }
                             int x1, y1, x2, y2;
                             ri->BoundingBox(level, &x1, &y1, &x2, &y2);
                             data.conf = ri->Confidence(level);
                             data.str = string(word);
                             data.box = Rect(x1, y1, x2 - x1, y2 - y1);
-                            out_debug << format("conf: {:10.5f}; BoundingBox: {:5d},{:5d},{:5d},{:5d}; word: '{:30.50s}'\n", data.conf, x1, y1, x2, y2, word) << endl;
+                            out_debug << format("conf: {:10.5f}; BoundingBox: {:5d},{:5d},{:5d},{:5d}; word: '{:30.50s}'", data.conf, x1, y1, x2, y2, word) << endl;
                             if (data.conf > 60)
                             {
                                 save.push_back(move(data));
@@ -277,6 +282,18 @@ int main()
     }
 
     cout << "stop\n";
+
+    out << "rank;name;clan;union" << endl;
+
+    for(const auto& person: persons)
+    {
+        out << person.second.rank.str << ";"<< person.first << ";" << person.second.clan.str << ";" << person.second.Union.str;
+        out << endl;
+    }
+
+    out.close();
+    out_debug.close();
+
     ocr_eng->End();
     ocr_eng_rus->End();
     return 0;
