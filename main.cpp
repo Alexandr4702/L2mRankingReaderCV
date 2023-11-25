@@ -138,7 +138,8 @@ bool checkIfVertCrosses(const Rect &a, const Rect &b)
     // return (interval1.start >= interval2.start && end1 <= end2);
 }
 
-char readKeyPress() {
+char readKeyPress()
+{
     char key;
     std::cin >> key;
     return key;
@@ -216,8 +217,8 @@ int main()
                             data.conf = ri->Confidence(level);
                             data.str = string(word);
                             data.box = Rect(x1, y1, x2 - x1, y2 - y1);
-                            out_debug << format("conf: {:10.5f}; BoundingBox: {:5d},{:5d},{:5d},{:5d}; word: '{:30.50s}'", data.conf, x1, y1, x2, y2, word) << endl;
-                            if (data.conf > 60)
+                            // out_debug << format("conf: {:10.5f}; BoundingBox: {:5d},{:5d},{:5d},{:5d}; word: {:30.50s}", data.conf, x1, y1, x2, y2, word) << endl;
+                            if (data.conf > 50)
                             {
                                 save.push_back(move(data));
                             }
@@ -246,13 +247,20 @@ int main()
                     {
                         if (checkIfVertCrosses(name.box, clanAli.box))
                         {
-                            if (persons[name.str].clan.str.length())
-                            {
-                                persons[name.str].Union = clanAli;
-                            }
-                            else
+                            out_debug << format("name.box y1 {:5d} y2 {:5d} size {:5d} clanAli.box y1 {:5d} y2 {:5d} size {:5d} {}  {}  y1n-y1c: {:5d} ",
+                                                name.box.y, name.box.y + name.box.height, name.box.height,
+                                                clanAli.box.y, clanAli.box.y + clanAli.box.height, clanAli.box.height,
+                                                name.str, clanAli.str, name.box.y - clanAli.box.y)
+                                      << endl;
+
+                            int y1n_y1c = name.box.y - clanAli.box.y;
+                            if ( abs(y1n_y1c) < 10 || y1n_y1c < -10 )
                             {
                                 persons[name.str].clan = clanAli;
+                            }
+                            else if (y1n_y1c > 10)
+                            {
+                                persons[name.str].Union = clanAli;
                             }
                         }
                     }
@@ -274,7 +282,7 @@ int main()
             }
         }
 
-        if(future_key.wait_for(chrono::system_clock::duration::min()) == future_status::ready)
+        if (future_key.wait_for(chrono::system_clock::duration::min()) == future_status::ready)
         {
             cout << future_key.get() << "\n";
             break;
@@ -283,11 +291,14 @@ int main()
 
     cout << "stop\n";
 
-    out << "rank;name;clan;union" << endl;
+    out << "rank;ran_c;name;clan;clan_c;union;union_c" << endl;
 
-    for(const auto& person: persons)
+    for (const auto &person : persons)
     {
-        out << person.second.rank.str << ";"<< person.first << ";" << person.second.clan.str << ";" << person.second.Union.str;
+        out << person.second.rank.str << ";" << person.second.rank.conf << ";";
+        out << person.first << ";" ;
+        out << person.second.clan.str << ";" << person.second.clan.conf << ";";
+        out << person.second.Union.str << ";" << person.second.Union.conf << ";";
         out << endl;
     }
 
