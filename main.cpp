@@ -167,7 +167,7 @@ int main()
     ocr_eng_rus->Init("C:/msys64/mingw64/share/tessdata/", "eng+rus", tesseract::OEM_LSTM_ONLY);
 
     ofstream out_debug("./test.txt");
-    ofstream out("./out.csv");
+    ofstream out("./out.txt");
 
     // Name, Rank, Clan, Alians
     unordered_map<string, PersonProperties> persons;
@@ -177,7 +177,14 @@ int main()
     while (true)
     {
         Mat im = captureScreenMat(hwnd);
+        Mat windowCurrentRanks;
+        Mat windowNames;
+        Mat windowClans;
+
         cv::cvtColor(im, im, COLOR_BGR2GRAY);
+        cv::threshold(im, im, 80, 255, THRESH_BINARY);
+        Mat im_copy = im.clone();
+
         static bool imw = true;
 
         if (checkIfBoxContainWord(ocr_eng, im, RankingString, WindowNameRoi))
@@ -185,15 +192,33 @@ int main()
             string serverName = getBoxWord(ocr_eng, im, ServerNameRoi);
             cout << "serverName: " << serverName << "\n";
             {
-                Mat windowCurrentRanks = im(RankingRoiCurrentRank);
-                Mat windowNames = im(RankingRoiName);
-                Mat windowClans = im(RankingRoiClan);
+                windowCurrentRanks = im(RankingRoiCurrentRank);
+                windowNames = im(RankingRoiName);
+                windowClans = im(RankingRoiClan);
                 vector<tessData> s_Ranks;
                 vector<tessData> Names;
                 vector<tessData> ClansAlians;
 
-                auto handleWindow = [&](tesseract::TessBaseAPI *ocr, string Name, Mat &window, vector<tessData> &save)
+                auto handleWindow = [&](tesseract::TessBaseAPI *ocr, const string& Name, Mat &window, vector<tessData> &save)
                 {
+                    Mat DialKer = getStructuringElement(MORPH_RECT, Size(6,6));
+                    Mat DilatedImg;
+                    dilate(window, DilatedImg, DialKer, Point(-1,-1),2);
+
+                    vector<vector<Point>> contours;
+                    vector<Vec4i> hierarchy;
+
+                    findContours(DilatedImg, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_NONE);
+
+                    for(const vector<Point>& count: contours)
+                    {
+                        Rect roi = boundingRect(count);
+                        if(imw) 
+                        {
+                            rectangle(window, roi, Scalar(255, 0, 0));
+                        }
+                    }                    
+
                     out_debug << Name << "\n";
                     ocr->SetPageSegMode(tesseract::PSM_SINGLE_COLUMN);
                     ocr->SetImage(window.data, window.cols, window.rows, im.elemSize1() * im.channels(), im.step);
@@ -217,6 +242,7 @@ int main()
                             data.conf = ri->Confidence(level);
                             data.str = string(word);
                             data.box = Rect(x1, y1, x2 - x1, y2 - y1);
+
                             // out_debug << format("conf: {:10.5f}; BoundingBox: {:5d},{:5d},{:5d},{:5d}; word: {:30.50s}", data.conf, x1, y1, x2, y2, word) << endl;
                             if (data.conf > 50)
                             {
@@ -269,15 +295,20 @@ int main()
 
             if (imw)
             {
-                rectangle(im, RankingRoi, Scalar(255, 0, 0));
-                rectangle(im, WindowNameRoi, Scalar(255, 0, 0));
-                rectangle(im, ServerNameRoi, Scalar(255, 0, 0));
+                Scalar color = Scalar(255, 0, 0);
+                rectangle(im, RankingRoi   , color);
+                rectangle(im, WindowNameRoi, color);
+                rectangle(im, ServerNameRoi, color);
 
-                rectangle(im, RankingRoiCurrentRank, Scalar(255, 0, 0));
-                rectangle(im, RankingRoiName, Scalar(255, 0, 0));
-                rectangle(im, RankingRoiClan, Scalar(255, 0, 0));
+                rectangle(im, RankingRoiCurrentRank, color);
+                rectangle(im, RankingRoiName       , color);
+                rectangle(im, RankingRoiClan       , color);
 
                 imwrite("./boxes.jpg", im);
+                imwrite("./windowCurrentRanks.jpg", windowCurrentRanks);
+                imwrite("./windowNames.jpg", windowNames);
+                imwrite("./windowClans.jpg", windowClans);
+
                 imw = false;
             }
         }
