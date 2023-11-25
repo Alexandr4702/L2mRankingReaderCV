@@ -17,6 +17,30 @@
 using namespace std;
 using namespace cv;
 
+class TimeMeasure
+{
+public:
+    TimeMeasure(const std::ostream& out = std::cout, double *save = nullptr): m_out(out), m_save_diff(save)
+    {
+        m_save_diff = save;
+        m_start = std::chrono::system_clock::now();
+    }
+    ~TimeMeasure()
+    {
+        m_stop = std::chrono::system_clock::now();
+        auto diff = m_stop - m_start;
+        if (m_save_diff)
+            *m_save_diff = std::chrono::duration_cast<std::chrono::microseconds>(diff).count();
+        std::cout << "Time in microsec: " << std::chrono::duration_cast<std::chrono::microseconds>(diff).count() << std::endl;
+    }
+
+private:
+    double *m_save_diff = nullptr;
+    const std::ostream& m_out;
+    std::chrono::system_clock::time_point m_start;
+    std::chrono::system_clock::time_point m_stop;
+};
+
 struct tessData
 {
     string str;
@@ -176,6 +200,8 @@ int main()
 
     while (true)
     {
+        TimeMeasure ms;
+        
         Mat im = captureScreenMat(hwnd);
         cv::cvtColor(im, im, COLOR_BGR2GRAY);
         static bool imw = true;
