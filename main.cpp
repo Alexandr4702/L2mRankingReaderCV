@@ -156,7 +156,7 @@ int main()
 
     const Rect RankingRoiCurrentRank(400, 408, 485 - 400, 796 - 408);
     const Rect RankingRoiName(604, 408, 905 - 604, 796 - 408);
-    const Rect RankingRoiClan(1005, 408, 1319 - 1005, 796 - 408);
+    const Rect RankingRoiClan(1010, 408, 1319 - 1010, 796 - 408);
 
     const string RankingString = "Ranking";
 
@@ -199,11 +199,17 @@ int main()
                 vector<tessData> Names;
                 vector<tessData> ClansAlians;
 
-                auto handleWindow = [&](tesseract::TessBaseAPI *ocr, const string& Name, Mat &window, vector<tessData> &save)
+                auto handleWindow = [&](tesseract::TessBaseAPI *ocr, const string& Name, Mat &window, vector<tessData> &save, int conf_lvl = 50)
                 {
-                    Mat DialKer = getStructuringElement(MORPH_RECT, Size(6,6));
+                    out_debug << Name << "\n";
+                    ocr->SetPageSegMode(tesseract::PSM_SINGLE_WORD);
+                    
+                    tesseract::ResultIterator *ri = ocr->GetIterator();
+                    tesseract::PageIteratorLevel level = tesseract::RIL_WORD;
+
+                    Mat DialKer = getStructuringElement(MORPH_RECT, Size(11,11) );
                     Mat DilatedImg;
-                    dilate(window, DilatedImg, DialKer, Point(-1,-1),2);
+                    dilate(window, DilatedImg, DialKer, Point(-1,-1), 1);
 
                     vector<vector<Point>> contours;
                     vector<Vec4i> hierarchy;
@@ -213,21 +219,16 @@ int main()
                     for(const vector<Point>& count: contours)
                     {
                         Rect roi = boundingRect(count);
-                        if(imw) 
+                        Mat ImgToHand = window(roi);
+                        ocr->SetImage(ImgToHand.data, ImgToHand.cols, ImgToHand.rows, ImgToHand.elemSize1() * ImgToHand.channels(), ImgToHand.step);
+                        ocr->Recognize(0);
+                        ri = ocr->GetIterator();
+
+                        if(ri == nullptr)
                         {
-                            rectangle(window, roi, Scalar(255, 0, 0));
+                            continue;
                         }
-                    }                    
 
-                    out_debug << Name << "\n";
-                    ocr->SetPageSegMode(tesseract::PSM_SINGLE_COLUMN);
-                    ocr->SetImage(window.data, window.cols, window.rows, im.elemSize1() * im.channels(), im.step);
-                    ocr->Recognize(0);
-                    tesseract::ResultIterator *ri = ocr->GetIterator();
-                    tesseract::PageIteratorLevel level = tesseract::RIL_WORD;
-
-                    if (ri != 0)
-                    {
                         do
                         {
                             tessData data;
@@ -241,22 +242,32 @@ int main()
                             ri->BoundingBox(level, &x1, &y1, &x2, &y2);
                             data.conf = ri->Confidence(level);
                             data.str = string(word);
+                            x1 += roi.x;
+                            x2 += roi.x;
+                            y1 += roi.y;
+                            y2 += roi.y;
                             data.box = Rect(x1, y1, x2 - x1, y2 - y1);
 
                             // out_debug << format("conf: {:10.5f}; BoundingBox: {:5d},{:5d},{:5d},{:5d}; word: {:30.50s}", data.conf, x1, y1, x2, y2, word) << endl;
-                            if (data.conf > 50)
+                            if (data.conf > conf_lvl)
                             {
                                 save.push_back(move(data));
                             }
 
                             delete[] word;
                         } while (ri->Next(level));
-                    }
+
+                        if(imw) 
+                        {
+                            imwrite("./" + Name + ".jpg", DilatedImg);
+                            rectangle(window, roi, Scalar(255, 0, 0));
+                        }
+                    }                    
                 };
 
-                handleWindow(ocr_eng, "Ranks---------", windowCurrentRanks, s_Ranks);
-                handleWindow(ocr_eng_rus, "Names---------", windowNames, Names);
-                handleWindow(ocr_eng_rus, "Clans---------", windowClans, ClansAlians);
+                handleWindow(ocr_eng, "Ranks", windowCurrentRanks, s_Ranks, 85);
+                handleWindow(ocr_eng_rus, "Names", windowNames, Names);
+                handleWindow(ocr_eng_rus, "Clans", windowClans, ClansAlians);
 
                 for (const auto &name : Names)
                 {
