@@ -14,13 +14,17 @@
 #include <thread>
 #include <chrono>
 
+#include <iomanip>
+#include <ctime>
+#include <sstream>
+
 using namespace std;
 using namespace cv;
 
 class TimeMeasure
 {
 public:
-    TimeMeasure(const std::ostream& out = std::cout, double *save = nullptr): m_out(out), m_save_diff(save)
+    TimeMeasure(const std::ostream &out = std::cout, double *save = nullptr) : m_out(out), m_save_diff(save)
     {
         m_save_diff = save;
         m_start = std::chrono::system_clock::now();
@@ -36,7 +40,7 @@ public:
 
 private:
     double *m_save_diff = nullptr;
-    const std::ostream& m_out;
+    const std::ostream &m_out;
     std::chrono::system_clock::time_point m_start;
     std::chrono::system_clock::time_point m_stop;
 };
@@ -59,6 +63,7 @@ struct tessData
 
 struct PersonProperties
 {
+    string serverName;
     tessData rank, clan, Union;
 };
 
@@ -169,6 +174,16 @@ char readKeyPress()
     return key;
 }
 
+string getStringTime()
+{
+    auto t = std::time(nullptr);
+    auto tm = *std::localtime(&t);
+    std::ostringstream oss;
+    oss << std::put_time(&tm, "%Y_%m_%d_%H_%M_%S");
+    const string str = oss.str();
+    return str;
+}
+
 int main()
 {
     // capture image
@@ -190,8 +205,10 @@ int main()
     tesseract::TessBaseAPI *ocr_eng_rus = new tesseract::TessBaseAPI();
     ocr_eng_rus->Init("C:/msys64/mingw64/share/tessdata/", "eng+rus", tesseract::OEM_LSTM_ONLY);
 
-    ofstream out_debug("./test.txt");
-    ofstream out("./out.csv");
+    const string dateString = getStringTime();
+
+    ofstream out_debug("./log_" + dateString + ".txt");
+    ofstream out("./servers_list_" + dateString + ".txt");
 
     // Name, Rank, Clan, Alians
     unordered_map<string, PersonProperties> persons;
@@ -201,9 +218,11 @@ int main()
     while (true)
     {
         TimeMeasure ms;
-        
+
         Mat im = captureScreenMat(hwnd);
         cv::cvtColor(im, im, COLOR_BGR2GRAY);
+        cv::threshold(im, im, 80, 255, THRESH_BINARY_INV);
+
         static bool imw = true;
 
         if (checkIfBoxContainWord(ocr_eng, im, RankingString, WindowNameRoi))
@@ -218,7 +237,7 @@ int main()
                 vector<tessData> Names;
                 vector<tessData> ClansAlians;
 
-                auto handleWindow = [&](tesseract::TessBaseAPI *ocr, string Name, Mat &window, vector<tessData> &save)
+                auto handleWindow = [&](tesseract::TessBaseAPI *ocr, string Name, Mat &window, vector<tessData> &save, int confLvl = 50)
                 {
                     out_debug << Name << "\n";
                     ocr->SetPageSegMode(tesseract::PSM_SINGLE_COLUMN);
@@ -244,7 +263,7 @@ int main()
                             data.str = string(word);
                             data.box = Rect(x1, y1, x2 - x1, y2 - y1);
                             // out_debug << format("conf: {:10.5f}; BoundingBox: {:5d},{:5d},{:5d},{:5d}; word: {:30.50s}", data.conf, x1, y1, x2, y2, word) << endl;
-                            if (data.conf > 50)
+                            if (data.conf > confLvl)
                             {
                                 save.push_back(move(data));
                             }
@@ -254,12 +273,14 @@ int main()
                     }
                 };
 
-                handleWindow(ocr_eng, "Ranks---------", windowCurrentRanks, s_Ranks);
+                handleWindow(ocr_eng, "Ranks---------", windowCurrentRanks, s_Ranks, 85);
                 handleWindow(ocr_eng_rus, "Names---------", windowNames, Names);
                 handleWindow(ocr_eng_rus, "Clans---------", windowClans, ClansAlians);
 
                 for (const auto &name : Names)
                 {
+                    persons[name.str].serverName = serverName;
+
                     for (const auto &rank : s_Ranks)
                     {
                         if (checkIfVertCrosses(name.box, rank.box))
@@ -280,7 +301,7 @@ int main()
                                       << endl;
 
                             int y1n_y1c = name.box.y - clanAli.box.y;
-                            if ( abs(y1n_y1c) < 10 || y1n_y1c < -10 )
+                            if (abs(y1n_y1c) < 10 || y1n_y1c < -10)
                             {
                                 persons[name.str].clan = clanAli;
                             }
@@ -317,14 +338,15 @@ int main()
 
     cout << "stop\n";
 
-    out << "rank;ran_c;name;clan;clan_c;union;union_c" << endl;
+    out << "rank;ran_c;name;clan;clan_c;union;union_c;serverName" << endl;
 
     for (const auto &person : persons)
     {
         out << person.second.rank.str << ";" << person.second.rank.conf << ";";
-        out << person.first << ";" ;
+        out << person.first << ";";
         out << person.second.clan.str << ";" << person.second.clan.conf << ";";
         out << person.second.Union.str << ";" << person.second.Union.conf << ";";
+        out << person.second.serverName;
         out << endl;
     }
 
