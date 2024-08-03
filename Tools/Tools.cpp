@@ -57,7 +57,7 @@ bool ImageGetter::initialize(HWND hwnd)
         return false;
     }
 
-    updateSize(); // Initialize window size and bitmap
+    updateSize();
 
     m_hMemDC = CreateCompatibleDC(m_hWindowDC);
     if (!m_hMemDC)
@@ -86,7 +86,6 @@ void ImageGetter::updateSize()
     int newWidth = m_rect.right - m_rect.left;
     int newHeight = m_rect.bottom - m_rect.top;
 
-    // Recreate the bitmap only if the size has changed
     if (newWidth != m_prevWidth || newHeight != m_prevHeight)
     {
         if (m_hBitmap)
@@ -155,7 +154,7 @@ cv::Mat ImageGetter::captureImage()
         return cv::Mat();
     }
 
-    updateSize(); // Update size before capturing
+    updateSize();
 
     SelectObject(m_hMemDC, m_hBitmap);
     BitBlt(m_hMemDC, 0, 0, m_rect.right - m_rect.left, m_rect.bottom - m_rect.top, m_hWindowDC, 0, 0, SRCCOPY);
@@ -164,18 +163,15 @@ cv::Mat ImageGetter::captureImage()
 
 ConsoleEncodingSwitcher::ConsoleEncodingSwitcher(UINT newCP)
 {
-    // Сохранить текущую кодировку консоли
     originalCP = GetConsoleOutputCP();
     originalInputCP = GetConsoleCP();
 
-    // Установить новую кодировку консоли
     SetConsoleOutputCP(newCP);
     SetConsoleCP(newCP);
 }
 
 ConsoleEncodingSwitcher::~ConsoleEncodingSwitcher()
 {
-    // Восстановить исходную кодировку консоли
     SetConsoleOutputCP(originalCP);
     SetConsoleCP(originalInputCP);
 }
@@ -226,145 +222,93 @@ void sendKeystroke(HWND hwnd, char key)
     }
 }
 
-bool SendKeyToWindow(HWND hwnd, WPARAM character)
-{
-    // // Преобразуем символ в виртуальный код клавиши
-    // int vkCode = VkKeyScan(character);
-    
-    // // Проверяем, успешно ли преобразован символ
-    // if (vkCode == -1) {
-    //     std::cerr << "Не удалось преобразовать символ в виртуальный код клавиши." << std::endl;
-    //     return;
-    // }
-
-    // // Получаем текущее время в миллисекундах
-    // DWORD timestamp = GetTickCount();
-    
-    // // Преобразуем временную метку в формат для передачи через lParam
-    // LPARAM lParam = (timestamp & 0xFFFFFFFF); // Можно использовать только младшие 32 бита для примера
-
-    // // Отправляем сообщение нажатия клавиши
-    // SendMessage(hwnd, WM_KEYDOWN, vkCode, lParam);
-
-    // // Задержка перед отпусканием клавиши
-    // Sleep(pressDelayMs);
-
-    // // Обновляем временную метку перед отправкой сообщения об отпускании
-    // timestamp = GetTickCount();
-    // lParam = (timestamp & 0xFFFFFFFF); // Обновляем lParam с новой временной меткой
-
-    // // Отправляем сообщение отпускания клавиши
-    // SendMessage(hwnd, WM_KEYUP, vkCode, lParam);
-}
-
-// Function to move the mouse using SendInput relative to the window
 void MoveMouseSendInput(HWND hwnd, int x, int y)
 {
-    // Convert window coordinates to screen coordinates
     POINT pt = {x, y};
     ClientToScreen(hwnd, &pt);
 
-    // Convert coordinates to absolute values
     int absX = pt.x * (65536 / GetSystemMetrics(SM_CXSCREEN));
     int absY = pt.y * (65536 / GetSystemMetrics(SM_CYSCREEN));
 
-    // Fill the INPUT structure
     INPUT input = {0};
     input.type = INPUT_MOUSE;
     input.mi.dx = absX;
     input.mi.dy = absY;
     input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
 
-    // Send the mouse event
     SendInput(1, &input, sizeof(INPUT));
 }
 
-// Function to move the mouse using PostMessage
 void MoveMousePostMessage(HWND hwnd, int x, int y)
 {
-    // Send the mouse move message
     PostMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
 }
 
-// Function to move the mouse using SendMessage
 void MoveMouseSendMessage(HWND hwnd, int x, int y)
 {
-    // Send the mouse move message
     SendMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
 }
 
-// Function to click the mouse using SendInput relative to the window
 void ClickMouseSendInput(HWND hwnd, int x, int y)
 {
-    // Convert window coordinates to screen coordinates
     POINT pt = {x, y};
     ClientToScreen(hwnd, &pt);
 
-    // Convert coordinates to absolute values
     int absX = pt.x * (65536 / GetSystemMetrics(SM_CXSCREEN));
     int absY = pt.y * (65536 / GetSystemMetrics(SM_CYSCREEN));
 
-    // Fill the INPUT structure for mouse down
     INPUT inputDown = {0};
     inputDown.type = INPUT_MOUSE;
     inputDown.mi.dx = absX;
     inputDown.mi.dy = absY;
     inputDown.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTDOWN;
 
-    // Fill the INPUT structure for mouse up
     INPUT inputUp = {0};
     inputUp.type = INPUT_MOUSE;
     inputUp.mi.dx = absX;
     inputUp.mi.dy = absY;
     inputUp.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTUP;
 
-    // Send the mouse events
     SendInput(1, &inputDown, sizeof(INPUT));
     SendInput(1, &inputUp, sizeof(INPUT));
 }
 
-// Function to click the mouse using PostMessage
 void ClickMousePostMessage(HWND hwnd, int x, int y)
 {
-    // Send the mouse button down and up messages
     PostMessage(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
     PostMessage(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
 }
 
-// Function to click the mouse using SendMessage
 void ClickMouseSendMessage(HWND hwnd, int x, int y)
 {
-    // Send the mouse button down and up messages
     SendMessage(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
     SendMessage(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(x, y));
 }
 
 void PrintActiveWindowTitle() {
-    HWND hwndActive = GetForegroundWindow(); // Получение дескриптора активного окна
+    HWND hwndActive = GetForegroundWindow();
 
     if (hwndActive) {
         char title[256];
         int length = GetWindowTextA(hwndActive, title, sizeof(title));
         
         if (length > 0) {
-            title[length] = '\0'; // Обеспечение завершения строки нулем
+            title[length] = '\0';
             std::cout << "Active window title: hwnd "<< hwndActive << " name: " << title << std::endl;
         }
     }
 }
 
 void PrintWindowUnderCursorTitle() {
-    // Получение текущих координат курсора
+
     POINT cursorPos;
     if (GetCursorPos(&cursorPos)) {
-        // Получение дескриптора окна под курсором
         HWND hwndUnderCursor = WindowFromPoint(cursorPos);
         
         if (hwndUnderCursor) {
             char title[256];
             GetWindowTextA(hwndUnderCursor, title, sizeof(title));
             
-            // Обеспечение завершения строки нулем
             title[sizeof(title) - 1] = '\0';
             std::cout << "window under cursor hwnd: " << hwndUnderCursor << " name: " << title << std::endl;
         }

@@ -78,7 +78,6 @@ private:
 };
 
 void sendKeystroke(HWND hwnd, char key);
-// bool SendKeyToWindow(HWND hwnd, WPARAM key);
 void PrintActiveWindowTitle();
 void PrintWindowUnderCursorTitle();
 
