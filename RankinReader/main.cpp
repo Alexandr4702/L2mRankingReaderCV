@@ -18,32 +18,10 @@
 #include <ctime>
 #include <sstream>
 
+#include "Tools.h"
+
 using namespace std;
 using namespace cv;
-
-class TimeMeasure
-{
-public:
-    TimeMeasure(const std::ostream &out = std::cout, double *save = nullptr) : m_out(out), m_save_diff(save)
-    {
-        m_save_diff = save;
-        m_start = std::chrono::system_clock::now();
-    }
-    ~TimeMeasure()
-    {
-        m_stop = std::chrono::system_clock::now();
-        auto diff = m_stop - m_start;
-        if (m_save_diff)
-            *m_save_diff = std::chrono::duration_cast<std::chrono::microseconds>(diff).count();
-        std::cout << "Time in microsec: " << std::chrono::duration_cast<std::chrono::microseconds>(diff).count() << std::endl;
-    }
-
-private:
-    double *m_save_diff = nullptr;
-    const std::ostream &m_out;
-    std::chrono::system_clock::time_point m_start;
-    std::chrono::system_clock::time_point m_stop;
-};
 
 struct tessData
 {
@@ -191,12 +169,12 @@ int main()
     HWND hwnd = GetDesktopWindow();
 
     const Rect RankingRoi(307, 392, 1338 - 307, 804 - 392);      // Corners х1 (307, 392) х4 (1338, 392)
-    const Rect WindowNameRoi(1553, 52, 1744 - 1553, 131 - 52);   // Corners х1 (1553, 52)  х4 (1744, 131)
-    const Rect ServerNameRoi(1055, 260, 1254 - 1055, 306 - 260); // Corners х1 (1011, 179)  х4 (1295, 233)
+    const Rect WindowNameRoi(1620, 52, 1790 - 1620, 131 - 52);   // Corners х1 (1553, 52)  х4 (1744, 131)
+    const Rect ServerNameRoi(1125, 270, 1235 - 1125, 297 - 270); // Corners х1 (1011, 179)  х4 (1295, 233)
 
-    const Rect RankingRoiCurrentRank(400, 408, 485 - 400, 796 - 408);
-    const Rect RankingRoiName(604, 408, 905 - 604, 796 - 408);
-    const Rect RankingRoiClan(1005, 408, 1319 - 1005, 796 - 408);
+    const Rect RankingRoiCurrentRank(360, 408, 447 - 360, 796 - 408);
+    const Rect RankingRoiName(540, 408, 850 - 540, 796 - 408);
+    const Rect RankingRoiClan(940, 408, 1320 - 940, 796 - 408);
 
     const string RankingString = "Ranking";
 
@@ -241,7 +219,7 @@ int main()
                 auto handleWindow = [&](tesseract::TessBaseAPI *ocr, string Name, Mat &window, vector<tessData> &save, int confLvl = 50)
                 {
                     out_debug << Name << "\n";
-                    ocr->SetPageSegMode(tesseract::PSM_SINGLE_COLUMN);
+                    ocr->SetPageSegMode(tesseract::PSM_AUTO);
                     ocr->SetImage(window.data, window.cols, window.rows, im.elemSize1() * im.channels(), im.step);
                     ocr->Recognize(0);
                     tesseract::ResultIterator *ri = ocr->GetIterator();
@@ -317,13 +295,14 @@ int main()
 
             if (imw)
             {
-                rectangle(im, RankingRoi, Scalar(255, 0, 0));
-                rectangle(im, WindowNameRoi, Scalar(255, 0, 0));
-                rectangle(im, ServerNameRoi, Scalar(255, 0, 0));
+                Scalar color(0,0,0);
+                rectangle(im, RankingRoi, color);
+                rectangle(im, WindowNameRoi, color);
+                rectangle(im, ServerNameRoi, color);
 
-                rectangle(im, RankingRoiCurrentRank, Scalar(255, 0, 0));
-                rectangle(im, RankingRoiName, Scalar(255, 0, 0));
-                rectangle(im, RankingRoiClan, Scalar(255, 0, 0));
+                rectangle(im, RankingRoiCurrentRank, color);
+                rectangle(im, RankingRoiName, color);
+                rectangle(im, RankingRoiClan, color);
 
                 imwrite("./boxes.jpg", im);
                 imw = false;

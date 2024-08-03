@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.5)
 
 project(RankingReader LANGUAGES CXX)
 project(ExpertiseRoller LANGUAGES CXX)
+project(GetImage LANGUAGES CXX)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -11,32 +12,41 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package( OpenCV REQUIRED )
 # find_package( Tesseract REQUIRED )
 
-set(RankingReader_SOURCES
+include_directories(./eigen ${OpenCV_INCLUDE_DIRS} ${Tesseract_INCLUDE_DIRS} Tools/)
+
+add_library(
+    TestObject
+    OBJECT 
+    Tools/Tools.cpp
+)
+
+add_executable(RankingReader
     RankinReader/main.cpp
 )
 
-set(ExpertiseRoller_SOURCES
+add_executable(ExpertiseRoller
     ExpertiseRoller/main.cpp
 )
 
-include_directories(./eigen ${OpenCV_INCLUDE_DIRS} ${Tesseract_INCLUDE_DIRS})
-
-add_executable(RankingReader
-    ${RankingReader_SOURCES}
-)
-
-add_executable(ExpertiseRoller
-    ${ExpertiseRoller_SOURCES}
+add_executable(GetImage
+    GetImage/main.cpp
 )
 
 target_link_libraries(RankingReader
     ${OpenCV_LIBS}
     ${Tesseract_LIBRARIES}
     libtesseract
+    TestObject
 )
 
 target_link_libraries(ExpertiseRoller
     ${OpenCV_LIBS}
     ${Tesseract_LIBRARIES}
     libtesseract
+    TestObject
+)
+
+target_link_libraries(GetImage
+    ${OpenCV_LIBS}
+    TestObject
 )

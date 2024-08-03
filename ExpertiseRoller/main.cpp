@@ -1,104 +1,61 @@
-#include <Windows.h>
-#include <iostream>
+#include <windows.h>
+#include <vector>
 #include <string>
-#include <thread>
-
-BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
-{
-    if (IsWindowVisible(hwnd))
-    {
-        char windowTitle[256];
-        GetWindowTextA(hwnd, windowTitle, sizeof(windowTitle));
-        HWND handler = FindWindow(NULL, windowTitle);
-        std::cout << "Window Title: " << windowTitle << " PID: " << handler << std::endl;
-    }
-    return TRUE;
-}
-
-void MinimizeWindow(const std::string &windowTitle)
-{
-    HWND window = FindWindow(NULL, windowTitle.c_str());
-    if (window != NULL)
-    {
-        ShowWindow(window, SW_MINIMIZE);
-    }
-    else
-    {
-        std::cerr << "Window not found." << std::endl;
-    }
-}
-
-void MaximizeWindow(const std::string &windowTitle)
-{
-    HWND window = FindWindow(NULL, windowTitle.c_str());
-    if (window != NULL)
-    {
-        ShowWindow(window, SW_SHOWMAXIMIZED);
-    }
-    else
-    {
-        std::cerr << "Window not found." << std::endl;
-    }
-}
-
-void MouseClick(uint32_t x, uint32_t y)
-{
-    INPUT Inputs[3] = {0};
-    ZeroMemory(Inputs, sizeof(Inputs));
-
-    Inputs[0].type = INPUT_MOUSE;
-    Inputs[0].mi.mouseData = 0;
-    Inputs[0].mi.dx = 10; // desired X coordinate
-    Inputs[0].mi.dy = 10; // desired Y coordinate
-    Inputs[0].mi.dwFlags =  MOUSEEVENTF_MOVE;
-
-    std::cout << 65536 / GetSystemMetrics(SM_CXSCREEN) << " " << 65536 / GetSystemMetrics(SM_CYSCREEN) << std::endl;
-
-    Inputs[1].type = INPUT_MOUSE;
-    Inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-
-    Inputs[2].type = INPUT_MOUSE;
-    Inputs[2].mi.dwFlags = MOUSEEVENTF_LEFTUP;
-
-    SendInput(ARRAYSIZE(Inputs), Inputs, sizeof(INPUT));
-}
+#include <stdint.h>
+#include <iostream>
+#include "Tools.h"
 
 int main()
 {
+    Beep(1000, 500);
 
-    Sleep(1000); // Sleep for 2000 milliseconds (2 seconds)
-    EnumWindows(EnumWindowsProc, 0);
+    WindowLister windowLister;
 
-    std::string windowTitle = "./ExpertiseRoller.exe";
+    windowLister.RefreshWindowList();
+    const auto &windows = windowLister.GetWindows();
 
-    HWND window_handler = FindWindow(NULL, windowTitle.c_str());
-    if (window_handler != NULL)
     {
-        SetForegroundWindow(window_handler);
+        ConsoleEncodingSwitcher switcher(1251);
+        // Вывести информацию обо всех окнах
+        for (const auto &window : windows)
+        {
+            std::cout
+                << " HWNDx16: " << window.hwnd
+                << " HWNDx10: " << reinterpret_cast<uint64_t>(window.hwnd)
+                << " - Title: " << window.title
+                << std::endl;
+        }
     }
-    else
+
+    const char *windowTitle = "Lineage2M l KanunJarrus";
+
+    // Найти окно по его заголовку
+    HWND hwnd = FindWindowA(NULL, windowTitle);
+
+    if (hwnd == NULL)
     {
-        std::cerr << "Window not found." << std::endl;
-        return -1;
+        std::cerr << "Window is not found" << std::endl;
+        return 1;
     }
-    // Minimize the window
-    // MaximizeWindow(windowTitle);
 
-    // SetActiveWindow(windowTitle);
+    // Sleep(100); // Небольшая задержка
 
-    std::thread Example([=](){
+    // sendKeystroke(hwnd, 'I');
+    // Sleep(1000);
+    // sendKeystroke(hwnd, 'I');
+    // Sleep(1000);
+    // sendKeystroke(hwnd, 'I');
+
     while (1)
     {
+        MoveMouseSendInput(hwnd, 100, 100);
+        MoveMouseSendMessage(hwnd, 100, 100);
         Sleep(1000);
-        SetForegroundWindow(window_handler);
-        // ShowWindow(window_handler, SW_SHOW);
-        MouseClick(1550, 580);
-        SetForegroundWindow(window_handler);
+        MoveMouseSendInput(hwnd, 500, 500);
+        MoveMouseSendMessage(hwnd, 500, 500);
+        Sleep(1000);
     }
-    }
-    );
-    Example.join();
-    // MinimizeWindow(windowTitle);
+    std::cout << "Signal was sent" << std::endl;
 
     return 0;
 }
