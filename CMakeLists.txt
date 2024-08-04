@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.5)
 project(RankingReader LANGUAGES CXX)
 project(ExpertiseRoller LANGUAGES CXX)
 project(GetImage LANGUAGES CXX)
+project(LifeStoneRoller LANGUAGES CXX)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -32,6 +33,10 @@ add_executable(GetImage
     GetImage/main.cpp
 )
 
+add_executable(LifeStoneRoller
+    LifeStoneRoller/main.cpp
+)
+
 target_link_libraries(RankingReader
     ${OpenCV_LIBS}
     ${Tesseract_LIBRARIES}
@@ -48,5 +53,12 @@ target_link_libraries(ExpertiseRoller
 
 target_link_libraries(GetImage
     ${OpenCV_LIBS}
+    TestObject
+)
+
+target_link_libraries(LifeStoneRoller
+    ${OpenCV_LIBS}
+    ${Tesseract_LIBRARIES}
+    libtesseract
     TestObject
 )
