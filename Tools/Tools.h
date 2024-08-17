@@ -90,3 +90,4 @@ void ClickMouseSendInput(HWND hwnd, int x, int y);
 void ClickMousePostMessage(HWND hwnd, int x, int y);
 void ClickMouseSendMessage(HWND hwnd, int x, int y);
 
+std::string getStringTime();

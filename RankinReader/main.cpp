@@ -152,16 +152,6 @@ char readKeyPress()
     return key;
 }
 
-string getStringTime()
-{
-    auto t = std::time(nullptr);
-    auto tm = *std::localtime(&t);
-    std::ostringstream oss;
-    oss << std::put_time(&tm, "%Y_%m_%d_%H_%M_%S");
-    const string str = oss.str();
-    return str;
-}
-
 int main()
 {
     // capture image

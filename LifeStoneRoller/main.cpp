@@ -1,6 +1,8 @@
 #include <iostream>
 #include "Tools.h"
 #include <tesseract/baseapi.h>
+#include <boost/algorithm/string.hpp>
+#include <fstream>
 
 int main()
 {
@@ -15,7 +17,7 @@ int main()
     if (!hwnd)
     {
         std::cerr << "Window not found!" << std::endl;
-        return false;
+        return -1;
     }
 
     ImageGetter imageGetter;
@@ -28,12 +30,6 @@ int main()
     tesseract::TessBaseAPI ocr_eng = tesseract::TessBaseAPI();
     ocr_eng.Init("C:/msys64/mingw64/share/tessdata/", "eng", tesseract::OEM_LSTM_ONLY);
 
-    tesseract::TessBaseAPI ocr_eng_rus = tesseract::TessBaseAPI();
-    ocr_eng_rus.Init("C:/msys64/mingw64/share/tessdata/", "eng+rus", tesseract::OEM_LSTM_ONLY);
-
-    tesseract::TessBaseAPI ocr_rus = tesseract::TessBaseAPI();
-    ocr_rus.Init("C:/msys64/mingw64/share/tessdata/", "rus", tesseract::OEM_LSTM_ONLY);
-
     const Rect propName1Rct(611, 421, 280, 24);
     const Rect propName2Rct(611, 446, 280, 24);
     const Rect propName3Rct(611, 472, 280, 24);
@@ -42,21 +38,25 @@ int main()
     const Rect propValue2Rct(891, 446, 105, 24);
     const Rect propValue3Rct(891, 472, 105, 24);
 
-    ConsoleEncodingSwitcher a(CP_UTF8);
+    const string dateString = getStringTime();
+    ofstream logFile("log_" + dateString + ".csv");
+
+    logFile << "ParamName1;ParamVal1;ParamName2;ParamVal2;ParamName3;ParamVal3\n";
 
     while (true)
     {
         Mat screen = imageGetter.captureImage();
-        if (screen.empty() && screen.cols != 1600 && screen.rows != 900)
+        if (screen.empty() or screen.cols != 1600 or screen.rows != 900)
         {
-            std::cerr << "Failed to capture image!" << std::endl;
+            std::cerr << "Failed to capture image or image size is not 1600x900!" << std::endl;
             break;
         }
 
         cv::cvtColor(screen, screen, COLOR_BGR2GRAY);
-        cv::threshold(screen, screen, 50, 255, THRESH_BINARY_INV);
+        // cv::threshold(screen, screen, 40, 255, THRESH_BINARY_INV);
+        // cv::blur(screen, screen, Size(2, 2));
 
-        auto recognizeImage = [&](const Rect &propNameRect, const Rect &propValueRect, const char *winName) -> pair<string, double>
+        auto recognizeImage = [&](const Rect &propNameRect, const Rect &propValueRect, const char *winName, pair<string, double> &result) -> bool
         {
             Mat propNameImage = screen(propNameRect);
             Mat propValueImage = screen(propValueRect);
@@ -68,38 +68,79 @@ int main()
 
                 char *reconizedStringPtr = ocr.GetUTF8Text();
                 string reconizedString = string(reconizedStringPtr);
-                reconizedString.pop_back();
-                delete[] reconizedStringPtr;
 
+                if (reconizedString.size() > 0)
+                    reconizedString.pop_back();
+
+                delete[] reconizedStringPtr;
                 return reconizedString;
             };
 
-            string propName = blockToString(ocr_rus, propNameImage);
+            result.first = blockToString(ocr_eng, propNameImage);
             string propValStr = blockToString(ocr_eng, propValueImage);
-            cout << propName << " " << propValStr << "\n";
 
             string propNameWinName = string("propName") + winName;
             string propValueWinName = string("propValue") + winName;
 
             imshow(propNameWinName, propNameImage);
             imshow(propValueWinName, propValueImage);
+            boost::algorithm::to_lower(result.first);
+            boost::algorithm::to_lower(propValStr);
 
-            return make_pair<string, double>("ad", 0);
+            try
+            {
+                result.second = std::stof(propValStr);
+            }
+            catch (...)
+            {
+                return false;
+            }
+
+            cout << result.first << " " << propValStr << "\n";
+            cout << result.first << " val: " << result.second << "\n";
+
+            return true;
         };
 
         cout << "New attempt\n \n";
-        recognizeImage(propName1Rct, propValue1Rct, "1");
-        recognizeImage(propName2Rct, propValue2Rct, "2");
-        recognizeImage(propName3Rct, propValue3Rct, "3");
-        // sendKeystroke(hwnd, 'Y');
+        pair<string, double> prop1, prop2, prop3;
+
+        bool result = recognizeImage(propName1Rct, propValue1Rct, "1", prop1) and
+                      recognizeImage(propName2Rct, propValue2Rct, "2", prop2) and
+                      recognizeImage(propName3Rct, propValue3Rct, "3", prop3);
+
+        if (result)
+        {
+            int totalDefence = 0;
+            totalDefence += prop1.first == "defense" ? prop1.second : 0;
+            totalDefence += prop2.first == "defense" ? prop2.second : 0;
+            totalDefence += prop3.first == "defense" ? prop3.second : 0;
+
+            logFile << prop1.first << ";" << prop1.second << ";";
+            logFile << prop2.first << ";" << prop2.second << ";";
+            logFile << prop3.first << ";" << prop3.second;
+            logFile << endl;
+
+            if (totalDefence > 0)
+            {
+                Beep(1000, 1000);
+            }
+            else
+            {
+                sendKeystroke(hwnd, 'Y');
+            }
+        }
+        else
+        {
+            cout << "Image is not recognized \n";
+        }
 
         if (cv::waitKey(1500) >= 0)
             break;
     }
 
+    logFile.close();
     ocr_eng.End();
-    ocr_eng_rus.End();
-    ocr_rus.End();
 
     return 0;
 }
