@@ -1,61 +1,267 @@
-#include <windows.h>
-#include <vector>
-#include <string>
-#include <stdint.h>
-#include <iostream>
 #include "Tools.h"
+#include <tesseract/baseapi.h>
+#include <boost/algorithm/string.hpp>
+#include <fstream>
 
-int main()
+class ColorDetector
 {
-    Beep(1000, 500);
+private:
+    static const std::array<cv::Scalar, 3> colors;
+    static const std::array<std::string, 4> colorNames;
 
-    WindowLister windowLister;
-
-    windowLister.RefreshWindowList();
-    const auto &windows = windowLister.GetWindows();
-
+    static inline double ColorDistance(const cv::Scalar &a, const cv::Scalar &b)
     {
-        ConsoleEncodingSwitcher switcher(1251);
-        // Вывести информацию обо всех окнах
-        for (const auto &window : windows)
+        return cv::norm(a - b);
+    }
+
+public:
+    enum ColorIndex
+    {
+        PURPLE,
+        GREEN,
+        BLUE,
+        UNDETECTED
+    };
+
+    static inline std::string IdxToStr(ColorIndex ind)
+    {
+        return colorNames[ind];
+    }
+
+    static ColorIndex detectColorIndex(const cv::Scalar &a)
+    {
+        // pair<ColorIndex, double>  |  ColorIndex, color distance between a and Colors[ColorIndex]
+        auto cmp = [](const std::pair<ColorIndex, double> &a, const std::pair<ColorIndex, double> &b)
+        { return a.second < b.second; };
+
+        std::set<std::pair<ColorIndex, double>, decltype(cmp)> colorIndexSet;
+
+        colorIndexSet.insert(std::pair<ColorIndex, double>(ColorIndex::PURPLE, ColorDistance(colors[ColorIndex::PURPLE], a)));
+        colorIndexSet.insert(std::pair<ColorIndex, double>(ColorIndex::GREEN, ColorDistance(colors[ColorIndex::GREEN], a)));
+        colorIndexSet.insert(std::pair<ColorIndex, double>(ColorIndex::BLUE, ColorDistance(colors[ColorIndex::BLUE], a)));
+
+        return colorIndexSet.begin()->first;
+    }
+};
+
+const std::array<cv::Scalar, 3> ColorDetector::colors = {
+    cv::Scalar(80.1043, 18.2386, 38.3279, 0),
+    cv::Scalar(34.7525, 54.0646, 12.7087, 0),
+    cv::Scalar(84.3319, 36.4075, 16.8168, 0)};
+
+const std::array<std::string, 4> ColorDetector::colorNames = {
+    "PURPLE",
+    "GREEN",
+    "BLUE",
+    "UNDETECTED"};
+
+struct SquareProps
+{
+    ColorDetector::ColorIndex colorIdx;
+    std::string propName;
+    int propVal;
+};
+
+const std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> DESIRED_RESULT = {
+    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 0 upper left corner
+    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 1 upper middle
+    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 2 upper right corner
+    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 3 middle left
+    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "stun resistance", 1), // 4 central stun resistance
+    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 5 middle right
+    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 6 lower left corner
+    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 7 lower middle corner
+    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0)                 // 8 lower right corner
+};
+
+// Property rectangles row by row
+const uint16_t SQUARE_SIZE_X = 198, SQUARE_SIZE_Y = 121;
+const cv::Rect PROP_RECTS[] = {
+    {314, 167, SQUARE_SIZE_X, SQUARE_SIZE_Y},
+    {534, 167, SQUARE_SIZE_X, SQUARE_SIZE_Y},
+    {754, 167, SQUARE_SIZE_X, SQUARE_SIZE_Y},
+
+    {314, 310, SQUARE_SIZE_X, SQUARE_SIZE_Y},
+    {534, 310, SQUARE_SIZE_X, SQUARE_SIZE_Y},
+    {754, 310, SQUARE_SIZE_X, SQUARE_SIZE_Y},
+
+    {314, 452, SQUARE_SIZE_X, SQUARE_SIZE_Y},
+    {534, 452, SQUARE_SIZE_X, SQUARE_SIZE_Y},
+    {754, 452, SQUARE_SIZE_X, SQUARE_SIZE_Y}};
+
+/*
+ * @return pair<output string, confidence>
+ */
+std::pair<std::string, int> blockToString(tesseract::TessBaseAPI &ocr, const cv::Mat &img)
+{
+    ocr.SetPageSegMode(tesseract::PSM_SINGLE_BLOCK);
+    ocr.SetImage(img.data, img.cols, img.rows, img.elemSize1() * img.channels(), img.step);
+
+    char *reconizedStringPtr = ocr.GetUTF8Text();
+    std::string reconizedString = std::string(reconizedStringPtr);
+
+    int confidence = ocr.MeanTextConf();
+
+    if (reconizedString.size() > 0)
+        reconizedString.pop_back();
+
+    delete[] reconizedStringPtr;
+    return std::make_pair(reconizedString, confidence);
+};
+
+bool extractPropVal(const std::string &input, SquareProps &ret)
+{
+    std::string part1, part2;
+    char delimiter = '+';
+    size_t pos = input.find(delimiter);
+
+    if (pos != std::string::npos)
+    {
+        ret.propName = input.substr(0, pos - 1);
+        part2 = input.substr(pos + 1);
+    }
+    else
+    {
+        return false;
+    }
+
+    std::string numberStr;
+    for (char c : part2)
+    {
+        if (std::isdigit(c))
         {
-            std::cout
-                << " HWNDx16: " << window.hwnd
-                << " HWNDx10: " << reinterpret_cast<uint64_t>(window.hwnd)
-                << " - Title: " << window.title
-                << std::endl;
+            numberStr += c;
         }
     }
 
-    const char *windowTitle = "Lineage2M l KanunJarrus";
-
-    // Найти окно по его заголовку
-    HWND hwnd = FindWindowA(NULL, windowTitle);
-
-    if (hwnd == NULL)
+    if (!numberStr.empty())
     {
-        std::cerr << "Window is not found" << std::endl;
-        return 1;
+        ret.propVal = std::stoi(numberStr);
     }
 
-    // Sleep(100); // Небольшая задержка
+    return true;
+}
 
-    // sendKeystroke(hwnd, 'I');
-    // Sleep(1000);
-    // sendKeystroke(hwnd, 'I');
-    // Sleep(1000);
-    // sendKeystroke(hwnd, 'I');
+int main()
+{
+    using namespace cv;
+    using namespace std;
+
+    const char *windowTitle = "Lineage2M l KanunJarrus";
+    HWND hwnd = FindWindowA(NULL, windowTitle);
+    // HWND hwnd = reinterpret_cast<HWND>(1642232);
+    std::cout << hwnd << std::endl;
+
+    if (!hwnd)
+    {
+        std::cerr << "Window not found!" << std::endl;
+        return -1;
+    }
+
+    ImageGetter imageGetter;
+
+    if (!imageGetter.initialize(hwnd))
+    {
+        return -1;
+    }
+
+    const string dateString = getStringTime();
+    ofstream logFile(string("log_") + "_exp_roller_" + dateString + ".csv");
+
+    tesseract::TessBaseAPI ocr_eng = tesseract::TessBaseAPI();
+    ocr_eng.Init("C:/msys64/mingw64/share/tessdata/", "eng", tesseract::OEM_LSTM_ONLY);
 
     while (1)
     {
-        MoveMouseSendInput(hwnd, 100, 100);
-        MoveMouseSendMessage(hwnd, 100, 100);
-        Sleep(1000);
-        MoveMouseSendInput(hwnd, 500, 500);
-        MoveMouseSendMessage(hwnd, 500, 500);
-        Sleep(1000);
+        // Will be switched to false in case of the fail
+        bool recognitionSuccess = true;
+        struct SquareProps Props[sizeof(PROP_RECTS) / sizeof(PROP_RECTS[0])];
+
+        Mat screen = imageGetter.captureImage(); // CV_8UC3
+        if (screen.empty() or screen.cols != 1600 or screen.rows != 900)
+        {
+            Beep(2000, 500);
+            std::cerr << "Failed to capture image or image size is not 1600x900!" << std::endl;
+            continue;
+        }
+        else
+        {
+            for (int i = 0; i < 9; i++)
+            {
+                Mat propSquare = screen(PROP_RECTS[i]);
+                Scalar color = mean(propSquare);
+                Props[i].colorIdx = ColorDetector::detectColorIndex(color);
+
+                cvtColor(propSquare, propSquare, COLOR_BGR2GRAY);
+                threshold(propSquare, propSquare, 70, 255, THRESH_BINARY);
+                // blur(propSquare, propSquare, Size(2, 2));
+
+                // Mask lock to avoid false recognition
+                const Rect lockRect = {167, 90, 31, 31};
+                rectangle(propSquare, lockRect, Scalar(0, 0, 0), FILLED);
+
+                auto [propStr, confidence] = blockToString(ocr_eng, propSquare);
+
+                replace(propStr.begin(), propStr.end(), '\n', ' ');
+                boost::algorithm::to_lower(propStr);
+
+                extractPropVal(propStr, Props[i]);
+
+                // cout << ColorDetector::IdxToStr(Props[i].colorIdx) << " " << i << " ";
+                cout << i << " ";
+                cout << ColorDetector::IdxToStr(Props[i].colorIdx) << " ";
+                cout << Props[i].propName << " ";
+                cout << confidence << " ";
+                cout << Props[i].propVal << " ";
+                cout << endl;
+
+                imshow(string("prop_") + to_string(i), propSquare);
+                if (confidence < 80)
+                {
+                    recognitionSuccess = false;
+                    break;
+                }
+            }
+            imshow("screen", screen);
+        }
+
+        if (recognitionSuccess)
+        {
+            bool needRoll = false;
+            for (int i = 0; i < 9; i++)
+            {
+                const auto &desiredColorIdx = get<0>(DESIRED_RESULT[i]);
+                const auto &desiredPropName = get<1>(DESIRED_RESULT[i]);
+                const auto &desiredPropVal = get<2>(DESIRED_RESULT[i]);
+
+                if ((desiredColorIdx != ColorDetector::ColorIndex::UNDETECTED && desiredColorIdx != Props[i].colorIdx) ||
+                    (!desiredPropName.empty() && (desiredPropName != Props[i].propName or desiredPropVal < Props[i].propVal)))
+                {
+                    needRoll = true;
+                    break;
+                }
+            }
+            if (needRoll)
+            {
+                sendKeystroke(hwnd, 'Y');
+                Sleep(200);
+                sendKeystroke(hwnd, 'Y');
+            }
+            else
+            {
+                Beep(1000, 500);
+                return 0;
+            }
+        }
+        else
+        {
+            cout << "Recognition failed\n";
+        }
+
+        cout << "---------------------------------------------------------------------------" << endl;
+        if (cv::waitKey(1500) >= 0)
+            break;
     }
-    std::cout << "Signal was sent" << std::endl;
 
     return 0;
 }
