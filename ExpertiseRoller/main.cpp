@@ -67,7 +67,7 @@ const std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> DES
     std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 1 upper middle
     std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 2 upper right corner
     std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 3 middle left
-    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "stun resistance", 1), // 4 central stun resistance
+    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "stun resistance", 4), // 4 central stun resistance
     std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 5 middle right
     std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 6 lower left corner
     std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 7 lower middle corner
@@ -215,13 +215,20 @@ int main()
                 cout << Props[i].propVal << " ";
                 cout << endl;
 
-                imshow(string("prop_") + to_string(i), propSquare);
+                logFile << i << ";";
+                logFile << ColorDetector::IdxToStr(Props[i].colorIdx) << ";";
+                logFile << Props[i].propName << ";";
+                logFile << confidence << ";";
+                logFile << Props[i].propVal << ";";
+
+                // imshow(string("prop_") + to_string(i), propSquare);
                 if (confidence < 80)
                 {
                     recognitionSuccess = false;
-                    break;
+                    // break;
                 }
             }
+            logFile << endl;
             imshow("screen", screen);
         }
 
@@ -235,7 +242,7 @@ int main()
                 const auto &desiredPropVal = get<2>(DESIRED_RESULT[i]);
 
                 if ((desiredColorIdx != ColorDetector::ColorIndex::UNDETECTED && desiredColorIdx != Props[i].colorIdx) ||
-                    (!desiredPropName.empty() && (desiredPropName != Props[i].propName or desiredPropVal < Props[i].propVal)))
+                    (!desiredPropName.empty() && (desiredPropName != Props[i].propName or desiredPropVal > Props[i].propVal)))
                 {
                     needRoll = true;
                     break;
@@ -259,7 +266,7 @@ int main()
         }
 
         cout << "---------------------------------------------------------------------------" << endl;
-        if (cv::waitKey(1500) >= 0)
+        if (cv::waitKey(1200) >= 0)
             break;
     }
 
