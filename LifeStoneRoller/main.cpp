@@ -9,9 +9,9 @@ int main()
     using namespace cv;
     using namespace std;
 
-    const char *windowTitle = "Lineage2M l KanunJarrus";
-    HWND hwnd = FindWindowA(NULL, windowTitle);
-    // HWND hwnd = reinterpret_cast<HWND>(1642232);
+    auto windowTitle = L"Lineage2M l KanunJarrus"s;
+    HWND hwnd = FindWindowW(NULL, windowTitle.c_str());
+    // hwnd = reinterpret_cast<HWND>(3213236);
     std::cout << hwnd << std::endl;
 
     if (!hwnd)
@@ -103,25 +103,29 @@ int main()
         };
 
         cout << "New attempt\n \n";
-        pair<string, double> prop1, prop2, prop3;
+        pair<string, double> props[3];
 
-        bool result = recognizeImage(propName1Rct, propValue1Rct, "1", prop1) and
-                      recognizeImage(propName2Rct, propValue2Rct, "2", prop2) and
-                      recognizeImage(propName3Rct, propValue3Rct, "3", prop3);
+        bool result = recognizeImage(propName1Rct, propValue1Rct, "1", props[0]) and
+                      recognizeImage(propName2Rct, propValue2Rct, "2", props[1]) and
+                      recognizeImage(propName3Rct, propValue3Rct, "3", props[2]);
 
         if (result)
         {
-            int totalDefence = 0;
-            totalDefence += prop1.first == "defense" ? prop1.second : 0;
-            totalDefence += prop2.first == "defense" ? prop2.second : 0;
-            totalDefence += prop3.first == "defense" ? prop3.second : 0;
+            // string reqParam = "skill damage boost";
+            string reqParam = "defense";
+            int reqVal = 2;
+            int val = 0;
 
-            logFile << prop1.first << ";" << prop1.second << ";";
-            logFile << prop2.first << ";" << prop2.second << ";";
-            logFile << prop3.first << ";" << prop3.second;
+            val += props[0].first == reqParam ? props[0].second : 0;
+            val += props[1].first == reqParam ? props[1].second : 0;
+            val += props[2].first == reqParam ? props[2].second : 0;
+
+            logFile << props[0].first << ";" << props[0].second << ";";
+            logFile << props[1].first << ";" << props[1].second << ";";
+            logFile << props[2].first << ";" << props[2].second;
             logFile << endl;
 
-            if (totalDefence > 0)
+            if (val >= reqVal)
             {
                 Beep(1000, 1000);
             }
