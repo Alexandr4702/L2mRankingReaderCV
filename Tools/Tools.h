@@ -3,6 +3,7 @@
 #include <vector>
 #include <windows.h>
 #include <opencv2/opencv.hpp>
+#include <tesseract/baseapi.h>
 
 class TimeMeasure
 {
@@ -91,3 +92,8 @@ void ClickMousePostMessage(HWND hwnd, int x, int y);
 void ClickMouseSendMessage(HWND hwnd, int x, int y);
 
 std::string getStringTime();
+
+/*
+ * @return pair<output string, confidence>
+ */
+std::pair<std::string, int> blockToString(tesseract::TessBaseAPI &ocr, const cv::Mat &img);

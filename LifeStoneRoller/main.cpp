@@ -61,23 +61,8 @@ int main()
             Mat propNameImage = screen(propNameRect);
             Mat propValueImage = screen(propValueRect);
 
-            auto blockToString = [&screen](tesseract::TessBaseAPI &ocr, const Mat &img) -> string
-            {
-                ocr.SetPageSegMode(tesseract::PSM_SINGLE_BLOCK);
-                ocr.SetImage(img.data, img.cols, img.rows, img.elemSize1() * img.channels(), img.step);
-
-                char *reconizedStringPtr = ocr.GetUTF8Text();
-                string reconizedString = string(reconizedStringPtr);
-
-                if (reconizedString.size() > 0)
-                    reconizedString.pop_back();
-
-                delete[] reconizedStringPtr;
-                return reconizedString;
-            };
-
-            result.first = blockToString(ocr_eng, propNameImage);
-            string propValStr = blockToString(ocr_eng, propValueImage);
+            result.first = blockToString(ocr_eng, propNameImage).first;
+            string propValStr = blockToString(ocr_eng, propValueImage).first;
 
             string propNameWinName = string("propName") + winName;
             string propValueWinName = string("propValue") + winName;

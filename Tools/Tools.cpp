@@ -382,3 +382,20 @@ std::string getStringTime()
     const std::string str = oss.str();
     return str;
 }
+
+std::pair<std::string, int> blockToString(tesseract::TessBaseAPI &ocr, const cv::Mat &img)
+{
+    ocr.SetPageSegMode(tesseract::PSM_SINGLE_BLOCK);
+    ocr.SetImage(img.data, img.cols, img.rows, img.elemSize1() * img.channels(), img.step);
+
+    char *reconizedStringPtr = ocr.GetUTF8Text();
+    std::string reconizedString = std::string(reconizedStringPtr);
+
+    int confidence = ocr.MeanTextConf();
+
+    if (reconizedString.size() > 0)
+        reconizedString.pop_back();
+
+    delete[] reconizedStringPtr;
+    return std::make_pair(reconizedString, confidence);
+};

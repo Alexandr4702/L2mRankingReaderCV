@@ -1,7 +1,10 @@
 #include "Tools.h"
-#include <tesseract/baseapi.h>
 #include <boost/algorithm/string.hpp>
 #include <fstream>
+
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/property_tree/detail/file_parser_error.hpp>
 
 class ColorDetector
 {
@@ -20,7 +23,7 @@ public:
         PURPLE,
         GREEN,
         BLUE,
-        UNDETECTED
+        UNDEFINED
     };
 
     static inline std::string IdxToStr(ColorIndex ind)
@@ -53,7 +56,7 @@ const std::array<std::string, 4> ColorDetector::colorNames = {
     "PURPLE",
     "GREEN",
     "BLUE",
-    "UNDETECTED"};
+    "UNDEFINED"};
 
 struct SquareProps
 {
@@ -62,16 +65,16 @@ struct SquareProps
     int propVal;
 };
 
-const std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> DESIRED_RESULT = {
-    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 0 upper left corner
-    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 1 upper middle
-    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 2 upper right corner
-    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 3 middle left
-    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "stun resistance", 4), // 4 central stun resistance
-    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 5 middle right
-    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 6 lower left corner
-    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0),                // 7 lower middle corner
-    std::make_tuple(ColorDetector::ColorIndex::UNDETECTED, "", 0)                 // 8 lower right corner
+std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> DESIRED_RESULT = {
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 0 upper left corner
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 1 upper middle
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 2 upper right corner
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 3 middle left
+    std::make_tuple(ColorDetector::ColorIndex::PURPLE, "stun resistance", 4), // 4 central stun resistance
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 5 middle right
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 6 lower left corner
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 7 lower middle corner
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0)                 // 8 lower right corner
 };
 
 // Property rectangles row by row
@@ -88,26 +91,6 @@ const cv::Rect PROP_RECTS[] = {
     {314, 452, SQUARE_SIZE_X, SQUARE_SIZE_Y},
     {534, 452, SQUARE_SIZE_X, SQUARE_SIZE_Y},
     {754, 452, SQUARE_SIZE_X, SQUARE_SIZE_Y}};
-
-/*
- * @return pair<output string, confidence>
- */
-std::pair<std::string, int> blockToString(tesseract::TessBaseAPI &ocr, const cv::Mat &img)
-{
-    ocr.SetPageSegMode(tesseract::PSM_SINGLE_BLOCK);
-    ocr.SetImage(img.data, img.cols, img.rows, img.elemSize1() * img.channels(), img.step);
-
-    char *reconizedStringPtr = ocr.GetUTF8Text();
-    std::string reconizedString = std::string(reconizedStringPtr);
-
-    int confidence = ocr.MeanTextConf();
-
-    if (reconizedString.size() > 0)
-        reconizedString.pop_back();
-
-    delete[] reconizedStringPtr;
-    return std::make_pair(reconizedString, confidence);
-};
 
 bool extractPropVal(const std::string &input, SquareProps &ret)
 {
@@ -147,7 +130,7 @@ int main()
     using namespace cv;
     using namespace std;
 
-    const char *windowTitle = "Lineage2M l KanunJarrus";
+    const char *windowTitle = "Lineage2M l Rept1loid";
     HWND hwnd = FindWindowA(NULL, windowTitle);
     // HWND hwnd = reinterpret_cast<HWND>(1642232);
     std::cout << hwnd << std::endl;
@@ -241,7 +224,7 @@ int main()
                 const auto &desiredPropName = get<1>(DESIRED_RESULT[i]);
                 const auto &desiredPropVal = get<2>(DESIRED_RESULT[i]);
 
-                if ((desiredColorIdx != ColorDetector::ColorIndex::UNDETECTED && desiredColorIdx != Props[i].colorIdx) ||
+                if ((desiredColorIdx != ColorDetector::ColorIndex::UNDEFINED && desiredColorIdx != Props[i].colorIdx) ||
                     (!desiredPropName.empty() && (desiredPropName != Props[i].propName or desiredPropVal > Props[i].propVal)))
                 {
                     needRoll = true;
