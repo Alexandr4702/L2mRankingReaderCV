@@ -5,6 +5,9 @@
 #include <opencv2/opencv.hpp>
 #include <tesseract/baseapi.h>
 
+#include <locale>
+#include <codecvt>
+
 class TimeMeasure
 {
 public:
@@ -97,3 +100,8 @@ std::string getStringTime();
  * @return pair<output string, confidence>
  */
 std::pair<std::string, int> blockToString(tesseract::TessBaseAPI &ocr, const cv::Mat &img);
+
+inline std::wstring utf8_to_wstring(const std::string& utf8_str) {
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    return converter.from_bytes(utf8_str);
+}

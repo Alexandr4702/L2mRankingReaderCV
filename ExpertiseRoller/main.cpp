@@ -6,6 +6,8 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/detail/file_parser_error.hpp>
 
+namespace pt = boost::property_tree;
+
 class ColorDetector
 {
 private:
@@ -65,18 +67,6 @@ struct SquareProps
     int propVal;
 };
 
-std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> DESIRED_RESULT = {
-    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 0 upper left corner
-    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 1 upper middle
-    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 2 upper right corner
-    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 3 middle left
-    std::make_tuple(ColorDetector::ColorIndex::PURPLE, "stun resistance", 4), // 4 central stun resistance
-    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 5 middle right
-    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 6 lower left corner
-    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),                // 7 lower middle corner
-    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0)                 // 8 lower right corner
-};
-
 // Property rectangles row by row
 const uint16_t SQUARE_SIZE_X = 198, SQUARE_SIZE_Y = 121;
 const cv::Rect PROP_RECTS[] = {
@@ -91,6 +81,18 @@ const cv::Rect PROP_RECTS[] = {
     {314, 452, SQUARE_SIZE_X, SQUARE_SIZE_Y},
     {534, 452, SQUARE_SIZE_X, SQUARE_SIZE_Y},
     {754, 452, SQUARE_SIZE_X, SQUARE_SIZE_Y}};
+
+std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> DESIRED_RESULT = {
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),             // 0 upper left corner
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),             // 1 upper middle
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),             // 2 upper right corner
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),             // 3 middle left
+    std::make_tuple(ColorDetector::ColorIndex::PURPLE, "stun resistance", 4), // 4 central stun resistance
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),             // 5 middle right
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),             // 6 lower left corner
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),             // 7 lower middle corner
+    std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0)              // 8 lower right corner
+};
 
 bool extractPropVal(const std::string &input, SquareProps &ret)
 {
@@ -125,13 +127,74 @@ bool extractPropVal(const std::string &input, SquareProps &ret)
     return true;
 }
 
+bool getDesiredResultFromJson(const std::string &json,
+                              std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> &ret,
+                              std::string &r_charName)
+{
+    pt::ptree SettingsTree;
+
+    try
+    {
+        read_json(json, SettingsTree);
+    }
+    catch (pt ::json_parser_error &e)
+    {
+        return false;
+    }
+    catch (...)
+    {
+        return false;
+    }
+
+    auto charName = SettingsTree.find("charName");
+    auto expertisParametrs = SettingsTree.find("expertisParametrs");
+
+    if (charName == SettingsTree.not_found() or expertisParametrs == SettingsTree.not_found())
+    {
+        return false;
+    }
+
+    r_charName = charName->second.get_value<std::string>();
+
+    for (int i = 0; i < 9; i++)
+    {
+        auto prop = std::next(expertisParametrs->second.begin(), i);
+
+        auto color = prop->second.find("color");
+        auto propName = prop->second.find("propertyName");
+        auto val = prop->second.find("val");
+
+        if (color == SettingsTree.not_found() or propName == SettingsTree.not_found() or val == SettingsTree.not_found())
+        {
+            return false;
+        }
+        std::get<0>(ret[i]) = static_cast<ColorDetector::ColorIndex>(color->second.get_value<int>());
+        std::get<1>(ret[i]) = propName->second.get_value<std::string>();
+        std::get<2>(ret[i]) = val->second.get_value<int>();
+    }
+    return true;
+}
+
 int main()
 {
     using namespace cv;
     using namespace std;
 
-    const char *windowTitle = "Lineage2M l Rept1loid";
-    HWND hwnd = FindWindowA(NULL, windowTitle);
+    std::string charName_u8;
+
+    bool jsonSucc = getDesiredResultFromJson("settings_ExpertiseRoller.json", DESIRED_RESULT, charName_u8);
+
+    if (!jsonSucc)
+    {
+        return -1;
+    }
+    const wstring winPrefix = L"Lineage2M l "s;
+
+    wstring charName_u16 = utf8_to_wstring(charName_u8);
+
+    wstring  windowTitle = winPrefix + charName_u16;
+
+    HWND hwnd = FindWindowW(NULL, windowTitle.c_str());
     // HWND hwnd = reinterpret_cast<HWND>(1642232);
     std::cout << hwnd << std::endl;
 
@@ -152,7 +215,7 @@ int main()
     ofstream logFile(string("log_") + "_exp_roller_" + dateString + ".csv");
 
     tesseract::TessBaseAPI ocr_eng = tesseract::TessBaseAPI();
-    ocr_eng.Init("C:/msys64/mingw64/share/tessdata/", "eng", tesseract::OEM_LSTM_ONLY);
+    ocr_eng.Init("./", "eng", tesseract::OEM_LSTM_ONLY);
 
     while (1)
     {
