@@ -1,3 +1,4 @@
+# for lib in $(ldd  ./ExpertiseRoller.exe | awk '{print $3}' | grep -v '^$' | grep mingw); do cp "$lib" ./; done
 cmake_minimum_required(VERSION 3.5)
 
 project(RankingReader LANGUAGES CXX)
@@ -62,3 +63,4 @@ target_link_libraries(LifeStoneRoller
     libtesseract
     TestObject
 )
+
