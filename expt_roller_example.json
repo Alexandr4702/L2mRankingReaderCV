@@ -1,0 +1,15 @@
+{
+    "_comment": "PURPLE - 0, GREEN - 1, BLUE - 2, UNDEFINED - 3; Resolution 1600x900; ",
+    "charName":"KanunJarrus",
+    "expertisParametrs":[
+        {"UpLeft"   : {"color": 3,"propertyName": "", "val": 0},                
+        "UpMid"    : {"color": 3,"propertyName": "", "val": 0},                
+        "UpRight"  : {"color": 3,"propertyName": "", "val": 0},                
+        "MidLeft"  : {"color": 3,"propertyName": "", "val": 0},                
+        "MidMid"   : {"color": 3,"propertyName": "", "val": 0}, 
+        "MidRight" : {"color": 3,"propertyName": "", "val": 0},                
+        "DwnLeft"  : {"color": 3,"propertyName": "", "val": 0},                
+        "DwnMid"   : {"color": 3,"propertyName": "", "val": 0},                
+        "DwnRight" : {"color": 3,"propertyName": "", "val": 0}}
+    ]
+}
