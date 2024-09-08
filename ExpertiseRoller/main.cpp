@@ -247,6 +247,9 @@ int main()
     tesseract::TessBaseAPI ocr_eng = tesseract::TessBaseAPI();
     ocr_eng.Init("./", "eng", tesseract::OEM_LSTM_ONLY);
 
+    Mat diamondPct = imread("diamond.jpg");
+    const Rect diamondPlaceRect = {990, 801, 156, 32};
+
     while (1)
     {
         // Will be switched to false in case of the fail
@@ -262,6 +265,19 @@ int main()
         }
         else
         {
+            // Check that almaze is not selected for rolling
+            Mat diamondPlace = screen(diamondPlaceRect);
+            Mat matchingResult;
+            double minVal, maxVal;
+            matchTemplate(diamondPlace, diamondPct, matchingResult, TM_CCOEFF_NORMED);
+            minMaxLoc(matchingResult, &minVal, &maxVal);
+            if(maxVal > 0.9)
+            {
+                Beep(2000, 500);
+                cout << "Diamond is choosen\n";
+                continue;
+            }
+
             for (int i = 0; i < 9; i++)
             {
                 Mat propSquare = screen(PROP_RECTS[i]);
