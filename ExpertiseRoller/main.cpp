@@ -82,7 +82,9 @@ const cv::Rect PROP_RECTS[] = {
     {534, 452, SQUARE_SIZE_X, SQUARE_SIZE_Y},
     {754, 452, SQUARE_SIZE_X, SQUARE_SIZE_Y}};
 
-std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> DESIRED_RESULT = {
+std::vector<std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9>> DESIRED_RESULT;
+
+/*
     std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),             // 0 upper left corner
     std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),             // 1 upper middle
     std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),             // 2 upper right corner
@@ -92,7 +94,7 @@ std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> DESIRED_R
     std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),             // 6 lower left corner
     std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),             // 7 lower middle corner
     std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0)              // 8 lower right corner
-};
+*/
 
 bool extractPropVal(const std::string &input, SquareProps &ret)
 {
@@ -128,7 +130,7 @@ bool extractPropVal(const std::string &input, SquareProps &ret)
 }
 
 bool getDesiredResultFromJson(const std::string &json,
-                              std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> &ret,
+                              std::vector<std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9>> &ret,
                               std::string &r_charName)
 {
     pt::ptree SettingsTree;
@@ -136,10 +138,6 @@ bool getDesiredResultFromJson(const std::string &json,
     try
     {
         read_json(json, SettingsTree);
-    }
-    catch (pt ::json_parser_error &e)
-    {
-        return false;
     }
     catch (...)
     {
@@ -150,28 +148,49 @@ bool getDesiredResultFromJson(const std::string &json,
     auto expertisParametrs = SettingsTree.find("expertisParametrs");
 
     if (charName == SettingsTree.not_found() or expertisParametrs == SettingsTree.not_found())
-    {
         return false;
-    }
 
     r_charName = charName->second.get_value<std::string>();
 
-    for (int i = 0; i < 9; i++)
+    const std::vector<std::string> corners = {"UpLeft",
+                                              "UpMid",
+                                              "UpRight",
+                                              "MidLeft",
+                                              "MidMid",
+                                              "MidRight",
+                                              "DwnLeft",
+                                              "DwnMid",
+                                              "DwnRight"};
+
+    auto expertisParametrsIt = expertisParametrs->second.begin();
+
+    while (expertisParametrsIt != expertisParametrs->second.end())
     {
-        auto prop = std::next(expertisParametrs->second.begin(), i);
+        std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> data;
 
-        auto color = prop->second.find("color");
-        auto propName = prop->second.find("propertyName");
-        auto val = prop->second.find("val");
-
-        if (color == SettingsTree.not_found() or propName == SettingsTree.not_found() or val == SettingsTree.not_found())
+        for (int i = 0; i < 9; i++)
         {
-            return false;
+            auto itCorner = expertisParametrsIt->second.find(corners[i]);
+
+            if (itCorner == expertisParametrsIt->second.not_found())
+                return false;
+
+            auto color = itCorner->second.find("color");
+            auto propName = itCorner->second.find("propertyName");
+            auto val = itCorner->second.find("val");
+
+            if (color == itCorner->second.not_found() or propName == itCorner->second.not_found() or val == itCorner->second.not_found())
+                return false;
+
+            std::get<0>(data[i]) = static_cast<ColorDetector::ColorIndex>(color->second.get_value<int>());
+            std::get<1>(data[i]) = propName->second.get_value<std::string>();
+            std::get<2>(data[i]) = val->second.get_value<int>();
         }
-        std::get<0>(ret[i]) = static_cast<ColorDetector::ColorIndex>(color->second.get_value<int>());
-        std::get<1>(ret[i]) = propName->second.get_value<std::string>();
-        std::get<2>(ret[i]) = val->second.get_value<int>();
+
+        ret.push_back(data);
+        expertisParametrsIt = std::next(expertisParametrsIt, 1);
     }
+
     return true;
 }
 
@@ -186,13 +205,14 @@ int main()
 
     if (!jsonSucc)
     {
+        cout << "Couldn't read json file \n";
         return -1;
     }
     const wstring winPrefix = L"Lineage2M l "s;
 
     wstring charName_u16 = utf8_to_wstring(charName_u8);
 
-    wstring  windowTitle = winPrefix + charName_u16;
+    wstring windowTitle = winPrefix + charName_u16;
 
     HWND hwnd = FindWindowW(NULL, windowTitle.c_str());
     // HWND hwnd = reinterpret_cast<HWND>(1642232);
@@ -261,12 +281,6 @@ int main()
                 cout << Props[i].propVal << " ";
                 cout << endl;
 
-                logFile << i << ";";
-                logFile << ColorDetector::IdxToStr(Props[i].colorIdx) << ";";
-                logFile << Props[i].propName << ";";
-                logFile << confidence << ";";
-                logFile << Props[i].propVal << ";";
-
                 // imshow(string("prop_") + to_string(i), propSquare);
                 if (confidence < 80)
                 {
@@ -274,26 +288,43 @@ int main()
                     // break;
                 }
             }
-            logFile << endl;
-            imshow("screen", screen);
+            // imshow("screen", screen);
         }
 
         if (recognitionSuccess)
         {
-            bool needRoll = false;
+            bool needRoll = true;
+
+            for (int i = 0; i < DESIRED_RESULT.size(); i++)
+            {
+                bool requiredRoll = false;
+                const auto desiredProps = DESIRED_RESULT[i];
+
+                for (int j = 0; j < 9; j++)
+                {
+                    const auto &desiredColorIdx = get<0>(desiredProps[j]);
+                    const auto &desiredPropName = get<1>(desiredProps[j]);
+                    const auto &desiredPropVal = get<2>(desiredProps[j]);
+
+                    if ((desiredColorIdx != ColorDetector::ColorIndex::UNDEFINED && desiredColorIdx != Props[j].colorIdx) ||
+                        (!desiredPropName.empty() && (desiredPropName != Props[j].propName or desiredPropVal > Props[j].propVal)))
+                    {
+                        requiredRoll = true;
+                        break;
+                    }
+                }
+                needRoll &= requiredRoll;
+            }
+
             for (int i = 0; i < 9; i++)
             {
-                const auto &desiredColorIdx = get<0>(DESIRED_RESULT[i]);
-                const auto &desiredPropName = get<1>(DESIRED_RESULT[i]);
-                const auto &desiredPropVal = get<2>(DESIRED_RESULT[i]);
-
-                if ((desiredColorIdx != ColorDetector::ColorIndex::UNDEFINED && desiredColorIdx != Props[i].colorIdx) ||
-                    (!desiredPropName.empty() && (desiredPropName != Props[i].propName or desiredPropVal > Props[i].propVal)))
-                {
-                    needRoll = true;
-                    break;
-                }
+                logFile << i << ";";
+                logFile << ColorDetector::IdxToStr(Props[i].colorIdx) << ";";
+                logFile << Props[i].propName << ";";
+                logFile << Props[i].propVal << ";";
             }
+            logFile << endl;
+
             if (needRoll)
             {
                 sendKeystroke(hwnd, 'Y');
@@ -312,8 +343,7 @@ int main()
         }
 
         cout << "---------------------------------------------------------------------------" << endl;
-        if (cv::waitKey(1200) >= 0)
-            break;
+        Sleep(1500);
     }
 
     return 0;
