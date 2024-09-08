@@ -54,6 +54,8 @@ target_link_libraries(ExpertiseRoller
 
 target_link_libraries(GetImage
     ${OpenCV_LIBS}
+    ${Tesseract_LIBRARIES}
+    libtesseract
     TestObject
 )
 
@@ -64,3 +66,5 @@ target_link_libraries(LifeStoneRoller
     TestObject
 )
 
+configure_file(./settings_ExpertiseRoller.json ./settings_ExpertiseRoller.json COPYONLY)
+configure_file(./diamond.jpg ./diamond.jpg COPYONLY)
