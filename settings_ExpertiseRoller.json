@@ -1,0 +1,26 @@
+{
+    "_comment": "PURPLE - 0, GREEN - 1, BLUE - 2, UNDEFINED - 3; Resolution 1600x900; ",
+    "charName":"KanunJarrus",
+    "expertisParametrs":[
+
+        {"UpLeft"   : {"color": 2,"propertyName": "weapon damage boost", "val": 4}},
+
+        {"UpMid"    : {"color": 2,"propertyName": "dmg reduct", "val": 3}},
+        {"UpMid"    : {"color": 2,"propertyName": "defense", "val": 3}},
+
+        {"UpRight"  : {"color": 2,"propertyName": "stun resistance", "val": 3}},
+
+        {"MidLeft"  : {"color": 2,"propertyName": "dmg reduct", "val": 3}},
+        {"MidLeft"  : {"color": 2,"propertyName": "defense", "val": 3}},
+
+        {"MidRight" : {"color": 2,"propertyName": "weapon damage boost", "val": 4}}, 
+
+        {"DwnLeft"  : {"color": 2,"propertyName": "skill damage boost", "val": 4}},
+
+        {"DwnMid"   : {"color": 2,"propertyName": "weapon damage boost", "val": 4}},
+
+        {"DwnRight" : {"color": 2,"propertyName": "dmg reduct", "val": 3}},
+        {"DwnRight" : {"color": 2,"propertyName": "defense", "val": 3}}
+
+    ]
+}
