@@ -72,11 +72,19 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG, LONG, DW
 
 int main()
 {
-    ImageGetter imageGetter;
+    using namespace cv;
+    using namespace std;
 
-    const char *windowTitle = "Lineage2M l KanunJarrus";
-    HWND hwnd = FindWindowA(NULL, windowTitle);
+    const wstring winPrefix = L"Lineage2M l "s;
+
+    wstring charName_u16 = L"KanunJarrus"s;
+
+    wstring windowTitle = winPrefix + charName_u16;
+
+    HWND hwnd = FindWindowW(NULL, windowTitle.c_str());
     std::cout << hwnd << std::endl;
+
+    ImageGetter imageGetter;
 
     if (!hwnd)
     {
@@ -89,30 +97,15 @@ int main()
         return -1;
     }
 
-    // Запуск цикла обновления
-    while (true)
+    cv::Mat mat = imageGetter.captureImage();
+    if (mat.empty())
     {
-        ConsoleEncodingSwitcher a(1251);
-
-        cv::Mat mat = imageGetter.captureImage();
-        if (mat.empty())
-        {
-            std::cerr << "Failed to capture image!" << std::endl;
-            break;
-        }
-        // cv::imshow("Captured Image", mat);
-        PrintActiveWindowTitle();
-        PrintWindowUnderCursorTitle();
-
-        // sendMouseMove(hwnd, 10, 10);
-        sendKeystroke(hwnd, 0x49);
-        Sleep(750);
-        std::cout << "Sent\n";
-
-        // // Проверка нажатия клавиши для выхода
-        // if (cv::waitKey(30) >= 0)
-        //     break;
+        std::cerr << "Failed to capture image!" << std::endl;
     }
+
+    imshow("Image", mat);
+
+    waitKey(0);
 
     return 0;
 }
