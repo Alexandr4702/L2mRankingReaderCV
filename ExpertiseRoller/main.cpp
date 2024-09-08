@@ -166,14 +166,24 @@ bool getDesiredResultFromJson(const std::string &json,
 
     while (expertisParametrsIt != expertisParametrs->second.end())
     {
-        std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> data;
+        std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> data =
+            {
+                std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
+                std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
+                std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
+                std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
+                std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
+                std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
+                std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
+                std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
+                std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0)};
 
         for (int i = 0; i < 9; i++)
         {
             auto itCorner = expertisParametrsIt->second.find(corners[i]);
 
             if (itCorner == expertisParametrsIt->second.not_found())
-                return false;
+                continue;
 
             auto color = itCorner->second.find("color");
             auto propName = itCorner->second.find("propertyName");
