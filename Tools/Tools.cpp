@@ -199,9 +199,9 @@ void checkError()
     DWORD error = GetLastError();
     // LPVOID errorMessage;
     // FormatMessage(
-    //     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-    //     NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-    //     (LPSTR)&errorMessage, 0, NULL);
+    //     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+    //     FORMAT_MESSAGE_IGNORE_INSERTS, NULL, error, MAKELANGID(LANG_NEUTRAL,
+    //     SUBLANG_DEFAULT), (LPSTR)&errorMessage, 0, NULL);
     std::cerr << "Failed to send WM_KEYDOWN to window. Error: " << error << std::endl;
 }
 

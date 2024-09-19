@@ -9,7 +9,7 @@ int main()
     using namespace cv;
     using namespace std;
 
-    auto windowTitle = L"Lineage2M l KanunJarrus"s;
+    auto windowTitle = L"Lineage2M l УтиныйПенис"s;
     HWND hwnd = FindWindowW(NULL, windowTitle.c_str());
     // hwnd = reinterpret_cast<HWND>(3213236);
     std::cout << hwnd << std::endl;
@@ -98,7 +98,7 @@ int main()
         {
             // string reqParam = "skill damage boost";
             string reqParam = "defense";
-            int reqVal = 2;
+            int reqVal = 1;
             int val = 0;
 
             val += props[0].first == reqParam ? props[0].second : 0;
