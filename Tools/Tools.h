@@ -1,3 +1,6 @@
+#ifndef TOOLS_H_
+#define TOOLS_H_
+
 #include <chrono>
 #include <iostream>
 #include <vector>
@@ -105,3 +108,5 @@ inline std::wstring utf8_to_wstring(const std::string& utf8_str) {
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     return converter.from_bytes(utf8_str);
 }
+
+#endif //TOOLS_H_
