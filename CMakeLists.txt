@@ -5,6 +5,7 @@ project(RankingReader LANGUAGES CXX)
 project(ExpertiseRoller LANGUAGES CXX)
 project(GetImage LANGUAGES CXX)
 project(LifeStoneRoller LANGUAGES CXX)
+project(MemAnalysisTest LANGUAGES CXX)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -14,12 +15,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package( OpenCV REQUIRED )
 # find_package( Tesseract REQUIRED )
 
-include_directories(./eigen ${OpenCV_INCLUDE_DIRS} ${Tesseract_INCLUDE_DIRS} Tools/)
+include_directories(./eigen ${OpenCV_INCLUDE_DIRS} ${Tesseract_INCLUDE_DIRS} Tools/ ./Memory-Hacking-Class)
 
 add_library(
     TestObject
     OBJECT 
     Tools/Tools.cpp
+    Memory-Hacking-Class/Memory.cpp
 )
 
 add_executable(RankingReader
@@ -36,6 +38,10 @@ add_executable(GetImage
 
 add_executable(LifeStoneRoller
     LifeStoneRoller/main.cpp
+)
+
+add_executable(MemAnalysisTest
+    MemReadTest/main.cpp
 )
 
 target_link_libraries(RankingReader
@@ -60,6 +66,13 @@ target_link_libraries(GetImage
 )
 
 target_link_libraries(LifeStoneRoller
+    ${OpenCV_LIBS}
+    ${Tesseract_LIBRARIES}
+    libtesseract
+    TestObject
+)
+
+target_link_libraries(MemAnalysisTest
     ${OpenCV_LIBS}
     ${Tesseract_LIBRARIES}
     libtesseract
