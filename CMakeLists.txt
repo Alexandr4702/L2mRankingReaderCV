@@ -44,39 +44,32 @@ add_executable(MemAnalysisTest
     MemReadTest/main.cpp
 )
 
-target_link_libraries(RankingReader
+set(LIBS 
     ${OpenCV_LIBS}
     ${Tesseract_LIBRARIES}
     libtesseract
     TestObject
+    -lgdi32
+)
+
+target_link_libraries(RankingReader
+    ${LIBS}
 )
 
 target_link_libraries(ExpertiseRoller
-    ${OpenCV_LIBS}
-    ${Tesseract_LIBRARIES}
-    libtesseract
-    TestObject
+    ${LIBS}
 )
 
 target_link_libraries(GetImage
-    ${OpenCV_LIBS}
-    ${Tesseract_LIBRARIES}
-    libtesseract
-    TestObject
+    ${LIBS}
 )
 
 target_link_libraries(LifeStoneRoller
-    ${OpenCV_LIBS}
-    ${Tesseract_LIBRARIES}
-    libtesseract
-    TestObject
+    ${LIBS}
 )
 
 target_link_libraries(MemAnalysisTest
-    ${OpenCV_LIBS}
-    ${Tesseract_LIBRARIES}
-    libtesseract
-    TestObject
+    ${LIBS}
 )
 
 configure_file(./settings_ExpertiseRoller.json ./settings_ExpertiseRoller.json COPYONLY)
