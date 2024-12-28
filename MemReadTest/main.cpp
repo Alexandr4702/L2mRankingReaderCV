@@ -7,7 +7,7 @@
 int main() {
     using namespace std;
 
-    wstring TARGET_PROCESS_NAME = L"Lineage2M l KanunJarrus"s;
+    wstring TARGET_PROCESS_NAME = L"Lineage2M l Katzman"s;
     string TARGET_PROCESS_NAME_S = "Lineage2M.exe";
 
     int GAME_VERSION_MODULE_OFFSET = 0x2A1D738; // [Base address of 'League of Legends.exe']+0x2A1D738 (address of a string containing a version number)
