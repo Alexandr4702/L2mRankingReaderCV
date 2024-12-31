@@ -1,49 +1,35 @@
 #include "Memory.hpp"
-#include <stdint.h>
 #include <iostream>
 #include <vector>
-#include <fstream>
 
 int main() {
     using namespace std;
 
-    wstring TARGET_PROCESS_NAME = L"Lineage2M l Katzman"s;
-    string TARGET_PROCESS_NAME_S = "Lineage2M.exe";
+    wstring TARGET_PROCESS_NAME = L"Lineage2M l OrbFighter"s;
 
-    int GAME_VERSION_MODULE_OFFSET = 0x2A1D738; // [Base address of 'League of Legends.exe']+0x2A1D738 (address of a string containing a version number)
+    Memory memory;
+    memory.EnableDebugPrivileges();
 
-    Memory Memory;
-    Memory.GetDebugPrivileges();
-
-    int processId = Memory.GetProcessId(TARGET_PROCESS_NAME);
-    cout << processId << "\n";
+    int processId = memory.GetProcessId(TARGET_PROCESS_NAME);
+    cout << "Process ID: " << processId << endl;
 
     HANDLE processHandle = OpenProcess(PROCESS_ALL_ACCESS, false, processId);
+    if (processHandle == 0) {
+        cerr << "Failed to open process" << endl;
+        return 1;
+    }
 
-    HMODULE baseAddress = Memory.GetModuleBase(processHandle, TARGET_PROCESS_NAME_S);
+    uintptr_t testAddress = 0x123456; // Пример тестового адреса
+    try {
+        int value = memory.ReadMemory<int>(processHandle, testAddress);
+        cout << "Read int value: " << value << endl;
 
-    cout << reinterpret_cast<long long int> (baseAddress) << "\n";
+        float floatValue = memory.ReadMemory<float>(processHandle, testAddress + 4);
+        cout << "Read float value: " << floatValue << endl;
+    } catch (const std::exception &e) {
+        cerr << e.what() << endl;
+    }
 
-    // int gameVersionAddress = baseAddress + GAME_VERSION_MODULE_OFFSET;
-    long long int buffSize = 1024 * 1024 * 128;
-    char* stringToRead = new char[buffSize];
-
-    SIZE_T NumberOfBytesToRead = buffSize;
-    SIZE_T NumberOfBytesActuallyRead = buffSize;
-    
-    BOOL success = ReadProcessMemory(processHandle, (LPCVOID)baseAddress, stringToRead, NumberOfBytesToRead, &NumberOfBytesActuallyRead);
-
-    cout << "result: " << success << " " << NumberOfBytesActuallyRead << "\n";
-
-    ofstream outfile;
-    outfile.open("test_data.bin",ios::binary|ios::out);
-
-    outfile.write(stringToRead, NumberOfBytesActuallyRead);
-
-    outfile.close();
-
-    delete[] stringToRead;
-    // std::cout << "Game version: " << gameVersionAddress << std::endl;
-
+    CloseHandle(processHandle);
     return 0;
 }
