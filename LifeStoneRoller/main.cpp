@@ -1,11 +1,14 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <conio.h>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <opencv2/opencv.hpp>
 #include <ranges>
 #include <string>
+#include <synchapi.h>
 #include <thread>
 #include <vector>
 
@@ -16,11 +19,11 @@
 
 #include "Tools.h"
 
-const bool SHOW_WINDOWS = true;
-
+const bool SHOW_WINDOWS = false;
+const uint32_t PAUSE_MS = 1500;
 const int MIN_CONFIDENCE = 75;
 
-// For 1600x900
+// For 1600x900 HUD 75?
 // const cv::Rect propName1Rct(590, 419, 280, 24);
 // const cv::Rect propName2Rct(590, 446, 280, 24);
 // const cv::Rect propName3Rct(590, 472, 280, 24);
@@ -29,16 +32,25 @@ const int MIN_CONFIDENCE = 75;
 // const cv::Rect propValue3Rct(891, 472, 150, 24);
 // std::pair<uint32_t, uint32_t> REQUIRED_RESOLUTION = {1600, 900};
 
-// For 1920x1120 HUD 100
-const cv::Rect propName1Rct(645, 513, 437, 35);
-const cv::Rect propName2Rct(645, 559, 437, 35);
-const cv::Rect propName3Rct(645, 602, 437, 35);
-const cv::Rect propValue1Rct(1082, 513, 227, 35);
-const cv::Rect propValue2Rct(1082, 559, 227, 35);
-const cv::Rect propValue3Rct(1082, 602, 227, 35);
+// For 1600x900 HUD 100
+const cv::Rect propName1Rct(530, 410, 411, 32);
+const cv::Rect propName2Rct(530, 447, 411, 32);
+const cv::Rect propName3Rct(530, 482, 411, 32);
+const cv::Rect propValue1Rct(941, 410, 153, 32);
+const cv::Rect propValue2Rct(941, 447, 153, 32);
+const cv::Rect propValue3Rct(941, 482, 153, 32);
+std::pair<uint32_t, uint32_t> REQUIRED_RESOLUTION = {1600, 900};
 
-// Width x Height
-std::pair<uint32_t, uint32_t> REQUIRED_RESOLUTION = {1920, 1120};
+// For 1920x1120 HUD 100
+// const cv::Rect propName1Rct(645, 513, 437, 35);
+// const cv::Rect propName2Rct(645, 559, 437, 35);
+// const cv::Rect propName3Rct(645, 602, 437, 35);
+// const cv::Rect propValue1Rct(1082, 513, 227, 35);
+// const cv::Rect propValue2Rct(1082, 559, 227, 35);
+// const cv::Rect propValue3Rct(1082, 602, 227, 35);
+// std::pair<uint32_t, uint32_t> REQUIRED_RESOLUTION = {1920, 1120}; // Width x Height
+
+const std::string TESSARACT_LOCATION = "./";
 
 namespace pt = boost::property_tree;
 
@@ -228,7 +240,6 @@ int main()
 
     auto windowTitle = L"Lineage2M l " + charName;
     HWND hwnd = FindWindowW(NULL, windowTitle.c_str());
-    // hwnd = reinterpret_cast<HWND>(3213236);
     std::cout << hwnd << std::endl;
 
     if (!hwnd)
@@ -245,7 +256,7 @@ int main()
     }
 
     tesseract::TessBaseAPI ocr_eng = tesseract::TessBaseAPI();
-    ocr_eng.Init("C:/msys64/mingw64/share/tessdata/", "eng", tesseract::OEM_LSTM_ONLY);
+    ocr_eng.Init(TESSARACT_LOCATION.c_str(), "eng", tesseract::OEM_LSTM_ONLY);
 
     const string dateString = getStringTime();
     ofstream logFile("log_" + dateString + ".csv");
@@ -254,9 +265,16 @@ int main()
 
     atomic<bool> stop_flag{true};
     thread exit_thread([&stop_flag]() {
-        char ch;
-        cin >> ch;
-        stop_flag.store(false, memory_order_relaxed);
+        while (stop_flag.load(memory_order_relaxed))
+        {
+            if (_kbhit())
+            {
+                _getch();
+                stop_flag.store(false);
+                break;
+            }
+            this_thread::sleep_for(10ms);
+        }
     });
 
     while (stop_flag.load(memory_order_relaxed))
@@ -273,12 +291,21 @@ int main()
         // cv::threshold(screen, screen, 40, 255, THRESH_BINARY_INV);
         // cv::blur(screen, screen, Size(2, 2));
 
-        threshold(screen, screen, 50, 255, THRESH_BINARY);
+        cv::GaussianBlur(screen, screen, cv::Size(1, 1), 0);
+        cv::threshold(screen, screen, 0, 255, cv::THRESH_BINARY_INV | cv::THRESH_OTSU);
+        // cv::adaptiveThreshold(screen, screen, 255,
+        //                     ADAPTIVE_THRESH_GAUSSIAN_C,
+        //                     THRESH_BINARY, 11, 2);
 
         auto recognizeImage = [&](const Rect &propNameRect, const Rect &propValueRect, const char *winName,
                                   pair<string, double> &result) -> bool {
             Mat propNameImage = screen(propNameRect);
             Mat propValueImage = screen(propValueRect);
+
+            resize(propNameImage, propNameImage, Size(), 1.5, 1.5, INTER_CUBIC);
+            resize(propValueImage, propValueImage, Size(), 2, 2, INTER_CUBIC);
+
+            cv::morphologyEx(propNameImage, propNameImage, MORPH_OPEN, getStructuringElement(MORPH_RECT, Size(2, 2)));
 
             const auto decoded_props_name = blockToString(ocr_eng, propNameImage);
             ocr_eng.SetVariable("tessedit_char_whitelist", "+%0123456789");
@@ -321,8 +348,8 @@ int main()
                 ret = false;
             }
 
-            cout << result.first << " " << propValStr << "\n";
-            cout << result.first << " val: " << result.second << "\n";
+            // cout << result.first << " " << propValStr << "\n";
+            // cout << result.first << " val: " << result.second << "\n";
             cout << "Confidence: " << decoded_props_name.second << " " << decoded_props_val.second
                  << " MinConf: " << confidence << "\n";
 
@@ -339,6 +366,7 @@ int main()
         result &= recognizeImage(propName3Rct, propValue3Rct, "3", props[2]);
 
         cout << props;
+        logFile << props;
 
         if (result)
         {
@@ -357,12 +385,20 @@ int main()
             cout << "Image is not recognized \n";
         }
 
-        if (cv::waitKey(1500) >= 0)
-            break;
+        if constexpr (SHOW_WINDOWS)
+        {
+            if (cv::waitKey(PAUSE_MS) >= 0)
+                break;
+        }
+        else
+        {
+            Sleep(PAUSE_MS);
+        }
     }
 
     logFile.close();
     ocr_eng.End();
+    stop_flag.store(false, std::memory_order::relaxed);
     exit_thread.join();
 
     return 0;
