@@ -68,7 +68,7 @@ int main() {
   using namespace std;
 
   const wstring winPrefix = L"Lineage2M l "s;
-  wstring charName_u16 = L"УтиныйПенис"s;
+  wstring charName_u16 = L"ВсемПривет"s;
   wstring windowTitle = winPrefix + charName_u16;
   HWND hwnd = FindWindowW(NULL, windowTitle.c_str());
   std::cout << hwnd << std::endl;

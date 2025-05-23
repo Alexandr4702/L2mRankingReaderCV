@@ -85,6 +85,7 @@ private:
 };
 
 void sendKeystroke(HWND hwnd, char key);
+void sendKeystroke(const std::wstring& windowTitle, char key);
 // bool SendKeyToWindow(HWND hwnd, WPARAM key);
 void PrintActiveWindowTitle();
 void PrintWindowUnderCursorTitle();

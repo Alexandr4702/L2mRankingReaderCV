@@ -1,4 +1,6 @@
 #include "Tools.h"
+#include <string>
+#include <thread>
 
 TimeMeasure::TimeMeasure(const std::ostream &out, double *save) : m_out(out), m_save_diff(save)
 {
@@ -204,27 +206,205 @@ void checkError()
     //     SUBLANG_DEFAULT), (LPSTR)&errorMessage, 0, NULL);
     std::cerr << "Failed to send WM_KEYDOWN to window. Error: " << error << std::endl;
 }
+HWND handlePostMessageError(const char* phase) {
+    DWORD err = GetLastError();
+    std::cerr << "[" << phase << "] PostMessage failed. Error code: " << err << std::endl;
+    return nullptr;
+}
 
 void sendKeystroke(HWND hwnd, char key)
 {
     UINT scanCode = MapVirtualKey(key, MAPVK_VK_TO_VSC);
-
     LPARAM lParamDown = 1 | (scanCode << 16);
     LPARAM lParamUp = 1 | (scanCode << 16) | (1 << 30) | (1 << 31);
-    DWORD currentTime = GetTickCount();
 
     std::cout << "KeyDOWN \n";
     if (!PostMessageA (hwnd, WM_KEYDOWN, key, lParamDown))
     {
         std::cerr << "PostMessage failed. Error: " << GetLastError() << std::endl;
     }
+    std::this_thread::sleep_for(std::chrono::milliseconds(30)); // Задержка
 
     std::cout << "KeyUP \n";
     if (!PostMessageA (hwnd, WM_KEYUP, key, lParamUp))
     {
         std::cerr << "PostMessage failed. Error: " << GetLastError() << std::endl;
     }
+    std::this_thread::sleep_for(std::chrono::milliseconds(30)); // Задержка
 }
+
+// void sendKeystroke(HWND hwnd, char key)
+// {
+//     if (!IsWindow(hwnd)) {
+//         std::cerr << "[!] Invalid window handle." << std::endl;
+//         return;
+//     }
+
+//     // Логирование валидности окна
+//     char title[256];
+//     GetWindowTextA(hwnd, title, sizeof(title));
+//     std::cout << "[*] Target window title: " << title << std::endl;
+
+//     DWORD targetThread = GetWindowThreadProcessId(hwnd, NULL);
+//     DWORD currentThread = GetCurrentThreadId();
+
+//     // Логируем поток текущего окна
+//     std::cout << "[*] Target thread: " << targetThread << ", Current thread: " << currentThread << std::endl;
+
+//     // Проверка, находится ли окно в фокусе
+//     HWND foregroundWindow = GetForegroundWindow();
+//     std::cout << "[*] Foreground window: " << foregroundWindow << ", Target window: " << hwnd << std::endl;
+
+//     if (foregroundWindow != hwnd) {
+//         std::cout << "[!] Warning: Target window is NOT in foreground" << std::endl;
+//     }
+
+//     // Привязка потоков, если не в фокусе
+//     AttachThreadInput(currentThread, targetThread, TRUE);
+
+//     // Попробуем активировать окно
+//     if (!SetForegroundWindow(hwnd)) {
+//         std::cerr << "[!] Failed to bring window to foreground." << std::endl;
+//     }
+
+//     SetActiveWindow(hwnd);
+//     SetFocus(hwnd);
+
+//     // Получим scanCode
+//     UINT scanCode = MapVirtualKeyA(key, MAPVK_VK_TO_VSC);
+//     LPARAM lParamDown = 1 | (scanCode << 16);
+//     LPARAM lParamUp   = 1 | (scanCode << 16) | (1 << 30) | (1 << 31);
+
+//     // Логируем перед отправкой сообщения
+//     std::cout << "[*] Posting KeyDOWN: " << key << std::endl;
+//     BOOL downOK = PostMessageA(hwnd, WM_KEYDOWN, key, lParamDown);
+//     if (!downOK) {
+//         std::cerr << "[!] PostMessage failed for WM_KEYDOWN. Error: " << GetLastError() << std::endl;
+//     }
+
+//     std::cout << "[*] Posting KeyUP: " << key << std::endl;
+//     BOOL upOK = PostMessageA(hwnd, WM_KEYUP, key, lParamUp);
+//     if (!upOK) {
+//         std::cerr << "[!] PostMessage failed for WM_KEYUP. Error: " << GetLastError() << std::endl;
+//     }
+
+//     // Отключаем привязку потоков
+//     AttachThreadInput(currentThread, targetThread, FALSE);
+// }
+
+// void sendKeystroke(HWND hwnd, char key)
+// {
+//     // 1) validate window handle
+//     if (!IsWindow(hwnd)) {
+//         std::cerr << "sendKeystroke: invalid window handle\n";
+//         return;
+//     }
+
+//     // 2) get target process ID
+//     DWORD pid = 0;
+//     GetWindowThreadProcessId(hwnd, &pid);
+//     if (pid == 0) {
+//         std::cerr << "sendKeystroke: failed to get process ID\n";
+//         return;
+//     }
+
+//     // 3) open the target process with rights for remote thread & memory ops
+//     HANDLE hProc = OpenProcess(
+//         PROCESS_CREATE_THREAD     |
+//         PROCESS_QUERY_INFORMATION |
+//         PROCESS_VM_OPERATION      |
+//         PROCESS_VM_WRITE          |
+//         PROCESS_VM_READ,
+//         FALSE, pid);
+//     if (!hProc) {
+//         std::cerr << "sendKeystroke: OpenProcess failed, error " 
+//                   << GetLastError() << "\n";
+//         return;
+//     }
+
+//     // 4) locate keybd_event in user32.dll
+//     HMODULE hUser32 = GetModuleHandleW(L"user32.dll");
+//     if (!hUser32) {
+//         std::cerr << "sendKeystroke: GetModuleHandle(user32.dll) failed\n";
+//         CloseHandle(hProc);
+//         return;
+//     }
+//     auto pKeybdEvent = 
+//         (LPTHREAD_START_ROUTINE)GetProcAddress(hUser32, "keybd_event");
+//     if (!pKeybdEvent) {
+//         std::cerr << "sendKeystroke: GetProcAddress(keybd_event) failed\n";
+//         CloseHandle(hProc);
+//         return;
+//     }
+
+//     // 5) prepare parameter structs for KEYDOWN and KEYUP
+//     struct KEYBD_ARG { BYTE bVk, bScan; DWORD dwFlags; ULONG_PTR dwExtra; };
+//     BYTE vk = static_cast<BYTE>(key);
+//     BYTE scan = static_cast<BYTE>(MapVirtualKeyA(vk, MAPVK_VK_TO_VSC));
+//     KEYBD_ARG argsDown = { vk, scan, 0,       0 };
+//     KEYBD_ARG argsUp   = { vk, scan, KEYEVENTF_KEYUP, 0 };
+
+//     SIZE_T argSize = sizeof(KEYBD_ARG);
+//     // allocate space for both structs
+//     LPVOID remoteArgs = VirtualAllocEx(
+//         hProc, nullptr, argSize * 2, MEM_COMMIT, PAGE_READWRITE);
+//     if (!remoteArgs) {
+//         std::cerr << "sendKeystroke: VirtualAllocEx failed, error " 
+//                   << GetLastError() << "\n";
+//         CloseHandle(hProc);
+//         return;
+//     }
+
+//     // write argsDown then argsUp
+//     if (!WriteProcessMemory(hProc, remoteArgs, &argsDown, argSize, nullptr) ||
+//         !WriteProcessMemory(hProc, (BYTE*)remoteArgs + argSize, &argsUp, argSize, nullptr))
+//     {
+//         std::cerr << "sendKeystroke: WriteProcessMemory failed, error " 
+//                   << GetLastError() << "\n";
+//         VirtualFreeEx(hProc, remoteArgs, 0, MEM_RELEASE);
+//         CloseHandle(hProc);
+//         return;
+//     }
+
+//     // 6) create remote thread for KEYDOWN
+//     HANDLE hThread = CreateRemoteThread(
+//         hProc, nullptr, 0,
+//         pKeybdEvent,
+//         remoteArgs,
+//         0, nullptr);
+//     if (!hThread) {
+//         std::cerr << "sendKeystroke: CreateRemoteThread(down) failed, error " 
+//                   << GetLastError() << "\n";
+//         VirtualFreeEx(hProc, remoteArgs, 0, MEM_RELEASE);
+//         CloseHandle(hProc);
+//         return;
+//     }
+//     WaitForSingleObject(hThread, INFINITE);
+//     CloseHandle(hThread);
+
+//     // slight pause to ensure the target processes the DOWN event
+//     Sleep(20);
+
+//     // 7) create remote thread for KEYUP
+//     hThread = CreateRemoteThread(
+//         hProc, nullptr, 0,
+//         pKeybdEvent,
+//         (BYTE*)remoteArgs + argSize,
+//         0, nullptr);
+//     if (!hThread) {
+//         std::cerr << "sendKeystroke: CreateRemoteThread(up) failed, error " 
+//                   << GetLastError() << "\n";
+//         VirtualFreeEx(hProc, remoteArgs, 0, MEM_RELEASE);
+//         CloseHandle(hProc);
+//         return;
+//     }
+//     WaitForSingleObject(hThread, INFINITE);
+//     CloseHandle(hThread);
+
+//     // 8) cleanup
+//     VirtualFreeEx(hProc, remoteArgs, 0, MEM_RELEASE);
+//     CloseHandle(hProc);
+// }
 
 bool SendKeyToWindow(HWND hwnd, WPARAM character)
 {
