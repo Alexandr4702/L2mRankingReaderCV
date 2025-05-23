@@ -1,13 +1,20 @@
-#include <algorithm>
-#include <cstdint>
-#include <iostream>
-#include "Tools.h"
 #include <tesseract/baseapi.h>
-#include <boost/algorithm/string.hpp>
-#include <fstream>
-#include <string>
+
+#include <algorithm>
 #include <array>
+#include <boost/algorithm/string.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <cstdint>
+#include <fstream>
+#include <iostream>
+#include <ranges>
+#include <string>
 #include <vector>
+
+#include "Tools.h"
+
+const bool SHOW_WINDOWS = true;
 
 const int MIN_CONFIDENCE = 75;
 
@@ -31,44 +38,151 @@ const cv::Rect propValue3Rct(1082, 602, 227, 35);
 // Width x Height
 std::pair<uint32_t, uint32_t> REQUIRED_RESOLUTION = {1920, 1120};
 
-const std::wstring CHAR_NAME = L"ВсемПривет";
+namespace pt = boost::property_tree;
 
-std::vector<std::array<std::pair<std::string, double>, 3>> REQUIRED_VALUES = 
+class ExpertiseConfigLoader
 {
-{
+  public:
+    using Property = std::pair<std::string, double>;
+    using PropertySet = std::array<Property, 3>;
+    using ConfigList = std::vector<PropertySet>;
+
+    struct ConfigData
+    {
+        std::wstring characterName;
+        ConfigList configurations;
+    };
+
+    enum class LoadStatus
+    {
+        Success,
+        FileNotFound,
+        InvalidFormat,
+        InvalidData
+    };
+
+    LoadStatus load(const std::string &filePath)
+    {
+        std::error_code ec;
+        pt::ptree tree;
+
+        try
         {
-            {"", 0},
-            {"", 0}, 
-            {"weapon damage boost", 15}
+            pt::read_json(filePath, tree);
         }
+        catch (const pt::json_parser_error &e)
+        {
+            m_lastError = "JSON parse error: " + std::string(e.what());
+            return LoadStatus::InvalidFormat;
+        }
+
+        try
+        {
+            m_config = parseConfig(tree);
+            return LoadStatus::Success;
+        }
+        catch (const std::exception &e)
+        {
+            m_lastError = "Config error: " + std::string(e.what());
+            return LoadStatus::InvalidData;
+        }
+    }
+
+    const std::wstring &getCharacterName() const noexcept
+    {
+        return m_config.characterName;
+    }
+
+    const ConfigList &getConfigurations() const noexcept
+    {
+        return m_config.configurations;
+    }
+
+    const std::string &getLastError() const noexcept
+    {
+        return m_lastError;
+    }
+
+    bool isLoaded() const noexcept
+    {
+        return !m_config.characterName.empty();
+    }
+
+  private:
+    ConfigData m_config;
+    std::string m_lastError;
+
+    ConfigData parseConfig(const pt::ptree &tree)
+    {
+        ConfigData result;
+
+        if (auto charName = tree.get_optional<std::string>("charName"))
+        {
+            result.characterName = utf8_to_wstring(*charName);
+        }
+        else
+        {
+            throw std::runtime_error("Missing 'charName' field");
+        }
+
+        if (auto lifeStoneParams = tree.get_child_optional("LifeStoneParametrs"))
+        {
+            for (const auto &lsArray : *lifeStoneParams)
+            {
+                PropertySet config;
+                size_t i = 0;
+
+                for (const auto &prop : lsArray.second)
+                {
+                    if (i >= 3)
+                        break;
+                    config[i++] = {prop.second.get<std::string>("propeName", ""),
+                                   prop.second.get<double>("propVal", 0.0)};
+                }
+                result.configurations.push_back(config);
+            }
+        }
+
+        return result;
+    }
+
+    static std::wstring utf8_to_wstring(const std::string &str)
+    {
+        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+        return converter.from_bytes(str);
     }
 };
 
-bool CheckProperties(const std::vector<std::array<std::pair<std::string, double>, 3>>& requiredValues,
-                     const std::array<std::pair<std::string, double>, 3>& props) 
+std::ostream &operator<<(std::ostream &os, const ExpertiseConfigLoader::PropertySet &props)
 {
-    for (const auto& reqArray : requiredValues) {
-        bool allMatch = true;
-        
-        for (size_t i = 0; i < 3; ++i) {
-            const auto& req = reqArray[i];
-            const auto& prop = props[i];
-            
-            if (req.first.empty()) {
+    for (const auto &[name, value] : props)
+    {
+        os << "\"" << name << "\": " << value << "\n";
+    }
+    return os;
+}
+
+/**
+ * @brief Checks if props match any config in requiredValues
+ * @param requiredValues List of {name, value} configs to match against
+ * @param props Current {name, value} set to check
+ * @return true if props meets ANY config's non-empty name/value requirements
+ */
+bool CheckProperties(const ExpertiseConfigLoader::ConfigList &requiredValues,
+                     const ExpertiseConfigLoader::PropertySet &props)
+{
+    for (const auto &reqArray : requiredValues)
+    {
+        for (const auto &[req, prop] : std::views::zip(reqArray, props))
+        {
+            if (req.first.empty())
                 continue;
+            if (prop.first == req.first && prop.second >= req.second)
+            {
+                return true;
             }
-            
-            if (prop.first != req.first || prop.second < req.second) {
-                allMatch = false;
-                break;
-            }
-        }
-        
-        if (allMatch) {
-            return true;
         }
     }
-    
     return false;
 }
 
@@ -77,7 +191,15 @@ int main()
     using namespace cv;
     using namespace std;
 
-    auto windowTitle = L"Lineage2M l " + CHAR_NAME;
+    ExpertiseConfigLoader config;
+    auto config_load_result = config.load("settings_lifeStoneRoller.json");
+    if (config_load_result != ExpertiseConfigLoader::LoadStatus::Success)
+        cout << config.getLastError() << endl;
+
+    const auto &charName = config.getCharacterName();
+    const auto &requiredValues = config.getConfigurations();
+
+    auto windowTitle = L"Lineage2M l " + charName;
     HWND hwnd = FindWindowW(NULL, windowTitle.c_str());
     // hwnd = reinterpret_cast<HWND>(3213236);
     std::cout << hwnd << std::endl;
@@ -108,7 +230,8 @@ int main()
         Mat screen = imageGetter.captureImage();
         if (screen.empty() or screen.cols != REQUIRED_RESOLUTION.first or screen.rows != REQUIRED_RESOLUTION.second)
         {
-            std::cerr << "Failed to capture image or image size is not " << REQUIRED_RESOLUTION.first << "x" << REQUIRED_RESOLUTION.second << "!\n";
+            std::cerr << "Failed to capture image or image size is not " << REQUIRED_RESOLUTION.first << "x"
+                      << REQUIRED_RESOLUTION.second << "!\n";
             break;
         }
 
@@ -118,8 +241,8 @@ int main()
 
         threshold(screen, screen, 50, 255, THRESH_BINARY);
 
-        auto recognizeImage = [&](const Rect &propNameRect, const Rect &propValueRect, const char *winName, pair<string, double> &result) -> bool
-        {
+        auto recognizeImage = [&](const Rect &propNameRect, const Rect &propValueRect, const char *winName,
+                                  pair<string, double> &result) -> bool {
             Mat propNameImage = screen(propNameRect);
             Mat propValueImage = screen(propValueRect);
 
@@ -135,16 +258,19 @@ int main()
             string propNameWinName = string("propName") + winName;
             string propValueWinName = string("propValue") + winName;
 
-            imshow(propNameWinName, propNameImage);
-            imshow(propValueWinName, propValueImage);
+            if constexpr (SHOW_WINDOWS)
+            {
+                imshow(propNameWinName, propNameImage);
+                imshow(propValueWinName, propValueImage);
+            }
             boost::algorithm::to_lower(result.first);
             boost::algorithm::to_lower(propValStr);
-    
+
             cout << result.first << " " << propValStr << "\n";
 
             propValStr.erase(std::remove_if(propValStr.begin(), propValStr.end(),
-                        [](char c) { return !std::isdigit(static_cast<unsigned char>(c)); }),
-                        propValStr.end());
+                                            [](char c) { return !std::isdigit(static_cast<unsigned char>(c)); }),
+                             propValStr.end());
 
             bool ret = true;
             if (confidence < MIN_CONFIDENCE)
@@ -163,9 +289,8 @@ int main()
 
             cout << result.first << " " << propValStr << "\n";
             cout << result.first << " val: " << result.second << "\n";
-            cout << "Confidence: " << decoded_props_name.second << " "
-                 << decoded_props_val.second << " MinConf: " << confidence
-                 << "\n";
+            cout << "Confidence: " << decoded_props_name.second << " " << decoded_props_val.second
+                 << " MinConf: " << confidence << "\n";
 
             return ret;
         };
@@ -182,7 +307,7 @@ int main()
 
         if (result)
         {
-            if (CheckProperties(REQUIRED_VALUES, props))
+            if (CheckProperties(requiredValues, props))
             {
                 Beep(1000, 1000);
             }
