@@ -1,16 +1,18 @@
-#include <tesseract/baseapi.h>
-
 #include <algorithm>
 #include <array>
-#include <boost/algorithm/string.hpp>
-#include <boost/property_tree/json_parser.hpp>
-#include <boost/property_tree/ptree.hpp>
+#include <atomic>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <ranges>
 #include <string>
+#include <thread>
 #include <vector>
+
+#include <boost/algorithm/string.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <tesseract/baseapi.h>
 
 #include "Tools.h"
 
@@ -163,27 +165,41 @@ std::ostream &operator<<(std::ostream &os, const ExpertiseConfigLoader::Property
 }
 
 /**
- * @brief Checks if props match any config in requiredValues
- * @param requiredValues List of {name, value} configs to match against
- * @param props Current {name, value} set to check
- * @return true if props meets ANY config's non-empty name/value requirements
+ * @brief Checks if current properties match any required configuration
+ * @param requiredValues List of allowed {propertyName, minValue} configurations
+ * @param props Current properties to check {propertyName, value} pairs
+ * @return true if props meet ALL non-empty requirements of ANY configuration,
+ *         false otherwise
+ * @note - Empty propertyNames in config are ignored (wildcards)
+ *       - PropertyNames are case-sensitive
+ *       - Values must be >= required minimum
  */
 bool CheckProperties(const ExpertiseConfigLoader::ConfigList &requiredValues,
                      const ExpertiseConfigLoader::PropertySet &props)
 {
-    for (const auto &reqArray : requiredValues)
+    for (const auto &reqConfig : requiredValues)
     {
-        for (const auto &[req, prop] : std::views::zip(reqArray, props))
+        bool allMatch = true;
+
+        for (const auto &[req, prop] : std::views::zip(reqConfig, props))
         {
-            if (req.first.empty())
-                continue;
-            if (prop.first == req.first && prop.second >= req.second)
-            {
-                return true;
+            if (!req.first.empty())
+            { // Only check non-wildcard properties
+                if (prop.first != req.first || prop.second < req.second)
+                {
+                    allMatch = false;
+                    break;
+                }
             }
         }
+
+        if (allMatch)
+        {
+            return true; // All non-empty properties in this config matched
+        }
     }
-    return false;
+
+    return false; // No matching config found
 }
 
 int main()
@@ -194,10 +210,21 @@ int main()
     ExpertiseConfigLoader config;
     auto config_load_result = config.load("settings_lifeStoneRoller.json");
     if (config_load_result != ExpertiseConfigLoader::LoadStatus::Success)
+    {
         cout << config.getLastError() << endl;
+        return 0;
+    }
 
     const auto &charName = config.getCharacterName();
     const auto &requiredValues = config.getConfigurations();
+
+    wcout << L"Char name: " << charName << endl;
+
+    cout << "Required config: \n";
+    for_each(requiredValues.begin(), requiredValues.end(), [](const auto &req) {
+        cout << req;
+        cout << "-------------------------------------------------------------------\n";
+    });
 
     auto windowTitle = L"Lineage2M l " + charName;
     HWND hwnd = FindWindowW(NULL, windowTitle.c_str());
@@ -225,7 +252,14 @@ int main()
 
     logFile << "ParamName1;ParamVal1;ParamName2;ParamVal2;ParamName3;ParamVal3\n";
 
-    while (true)
+    atomic<bool> stop_flag{true};
+    thread exit_thread([&stop_flag]() {
+        char ch;
+        cin >> ch;
+        stop_flag.store(false, memory_order_relaxed);
+    });
+
+    while (stop_flag.load(memory_order_relaxed))
     {
         Mat screen = imageGetter.captureImage();
         if (screen.empty() or screen.cols != REQUIRED_RESOLUTION.first or screen.rows != REQUIRED_RESOLUTION.second)
@@ -296,8 +330,7 @@ int main()
         };
 
         cout << "New attempt\n \n";
-        // pair<string, double> props[3];
-        std::array<std::pair<std::string, double>, 3> props;
+        ExpertiseConfigLoader::PropertySet props;
 
         bool result = true;
 
@@ -305,11 +338,14 @@ int main()
         result &= recognizeImage(propName2Rct, propValue2Rct, "2", props[1]);
         result &= recognizeImage(propName3Rct, propValue3Rct, "3", props[2]);
 
+        cout << props;
+
         if (result)
         {
             if (CheckProperties(requiredValues, props))
             {
                 Beep(1000, 1000);
+                break;
             }
             else
             {
@@ -327,6 +363,7 @@ int main()
 
     logFile.close();
     ocr_eng.End();
+    exit_thread.join();
 
     return 0;
 }
