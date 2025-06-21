@@ -81,7 +81,7 @@ const cv::Rect PROP_RECTS[] = {{314, 198, SQUARE_SIZE_X, SQUARE_SIZE_Y}, {534, 1
                                {314, 482, SQUARE_SIZE_X, SQUARE_SIZE_Y}, {534, 482, SQUARE_SIZE_X, SQUARE_SIZE_Y},
                                {754, 482, SQUARE_SIZE_X, SQUARE_SIZE_Y}};
 
-std::vector<std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9>> DESIRED_RESULT;
+std::vector<std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9>> DESIRED_RESULTS;
 
 bool extractPropVal(const std::string &input, SquareProps &ret)
 {
@@ -146,16 +146,8 @@ bool getDesiredResultFromJson(const std::string &json,
 
     while (expertisParametrsIt != expertisParametrs->second.end())
     {
-        std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> data = {
-            std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
-            std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
-            std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
-            std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
-            std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
-            std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
-            std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
-            std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0),
-            std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0)};
+        std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9> data;
+        data.fill(std::make_tuple(ColorDetector::ColorIndex::UNDEFINED, "", 0));
 
         for (int i = 0; i < 9; i++)
         {
@@ -191,14 +183,14 @@ int main()
 
     std::string charName_u8;
 
-    bool jsonSucc = getDesiredResultFromJson("settings_ExpertiseRoller.json", DESIRED_RESULT, charName_u8);
+    bool jsonSucc = getDesiredResultFromJson("settings_ExpertiseRoller.json", DESIRED_RESULTS, charName_u8);
 
     if (!jsonSucc)
     {
         cout << "Couldn't read json file \n";
         return -1;
     }
-    const wstring winPrefix = L"Lineage2M l " s;
+    const wstring winPrefix = L"Lineage2M l "s;
     wstring charName_u16 = utf8_to_wstring(charName_u8);
     wstring windowTitle = winPrefix + charName_u16;
     HWND hwnd = FindWindowW(NULL, windowTitle.c_str());
@@ -302,16 +294,13 @@ int main()
         {
             bool needRoll = true;
 
-            for (int i = 0; i < DESIRED_RESULT.size(); i++)
+            for (const auto& DESIRED_RESULT : DESIRED_RESULTS)
             {
                 bool requiredRoll = false;
-                const auto desiredProps = DESIRED_RESULT[i];
 
                 for (int j = 0; j < 9; j++)
                 {
-                    const auto &desiredColorIdx = get<0>(desiredProps[j]);
-                    const auto &desiredPropName = get<1>(desiredProps[j]);
-                    const auto &desiredPropVal = get<2>(desiredProps[j]);
+                    const auto& [desiredColorIdx, desiredPropName, desiredPropVal] = DESIRED_RESULT[j];
 
                     if ((desiredColorIdx != ColorDetector::ColorIndex::UNDEFINED &&
                          desiredColorIdx != Props[j].colorIdx) ||
