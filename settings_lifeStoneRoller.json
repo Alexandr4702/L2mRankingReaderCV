@@ -1,5 +1,5 @@
 {
-    "_comment": "HUD - 100 resolution 1920x1120",
+    "_comment": "HUD 100, resolution 1600x900",
     "charName":"OrbFighter",
     "LifeStoneParametrs":[
         [{"propeName":"defense", "propVal": 1}, {"propeName":"defense", "propVal": 1}, {"propeName":"", "propVal": 0}],

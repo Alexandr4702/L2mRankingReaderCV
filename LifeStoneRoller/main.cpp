@@ -39,7 +39,7 @@ const cv::Rect propName3Rct(530, 482, 411, 32);
 const cv::Rect propValue1Rct(941, 410, 153, 32);
 const cv::Rect propValue2Rct(941, 447, 153, 32);
 const cv::Rect propValue3Rct(941, 482, 153, 32);
-std::pair<uint32_t, uint32_t> REQUIRED_RESOLUTION = {1600, 900};
+constexpr std::pair<int, int> REQUIRED_RESOLUTION = {1600, 900};
 
 // For 1920x1120 HUD 100
 // const cv::Rect propName1Rct(645, 513, 437, 35);
@@ -54,7 +54,7 @@ const std::string TESSARACT_LOCATION = "./";
 
 namespace pt = boost::property_tree;
 
-class ExpertiseConfigLoader
+class LifeStoneConfigLoader
 {
   public:
     using Property = std::pair<std::string, double>;
@@ -77,7 +77,8 @@ class ExpertiseConfigLoader
 
     LoadStatus load(const std::string &filePath)
     {
-        std::error_code ec;
+        m_config = {};
+        m_lastError.clear();
         pt::ptree tree;
 
         try
@@ -133,6 +134,8 @@ class ExpertiseConfigLoader
         if (auto charName = tree.get_optional<std::string>("charName"))
         {
             result.characterName = ::utf8_to_wstring(*charName);
+            if (charName->empty() || result.characterName.empty())
+                throw std::runtime_error("'charName' must be valid non-empty UTF-8");
         }
         else
         {
@@ -148,12 +151,14 @@ class ExpertiseConfigLoader
 
                 for (const auto &prop : lsArray.second)
                 {
-                    if (i >= 3)
-                        break;
+                    if (i >= 3) throw std::runtime_error("Each life stone configuration must have exactly 3 entries");
                     const auto name = prop.second.get_optional<std::string>("propertyName")
                                           .value_or(prop.second.get<std::string>("propeName", ""));
-                    config[i++] = {name, prop.second.get<double>("propVal", 0.0)};
+                    const double value = prop.second.get<double>("propVal", 0.0);
+                    if (value < 0) throw std::runtime_error("'propVal' cannot be negative");
+                    config[i++] = {boost::algorithm::to_lower_copy(name), value};
                 }
+                if (i != 3) throw std::runtime_error("Each life stone configuration must have exactly 3 entries");
                 result.configurations.push_back(config);
             }
         }
@@ -165,7 +170,7 @@ class ExpertiseConfigLoader
 
 };
 
-std::ostream &operator<<(std::ostream &os, const ExpertiseConfigLoader::PropertySet &props)
+std::ostream &operator<<(std::ostream &os, const LifeStoneConfigLoader::PropertySet &props)
 {
     for (const auto &[name, value] : props)
     {
@@ -184,8 +189,8 @@ std::ostream &operator<<(std::ostream &os, const ExpertiseConfigLoader::Property
  *       - PropertyNames are case-sensitive
  *       - Values must be >= required minimum
  */
-bool CheckProperties(const ExpertiseConfigLoader::ConfigList &requiredValues,
-                     const ExpertiseConfigLoader::PropertySet &props)
+bool CheckProperties(const LifeStoneConfigLoader::ConfigList &requiredValues,
+                     const LifeStoneConfigLoader::PropertySet &props)
 {
     for (const auto &reqConfig : requiredValues)
     {
@@ -217,12 +222,12 @@ int main()
     using namespace cv;
     using namespace std;
 
-    ExpertiseConfigLoader config;
+    LifeStoneConfigLoader config;
     auto config_load_result = config.load("settings_lifeStoneRoller.json");
-    if (config_load_result != ExpertiseConfigLoader::LoadStatus::Success)
+    if (config_load_result != LifeStoneConfigLoader::LoadStatus::Success)
     {
         cout << config.getLastError() << endl;
-        return 0;
+        return 1;
     }
 
     const auto &charName = config.getCharacterName();
@@ -243,14 +248,14 @@ int main()
     if (!hwnd)
     {
         std::cerr << "Window not found!" << std::endl;
-        return -1;
+        return 1;
     }
 
     ImageGetter imageGetter;
 
     if (!imageGetter.initialize(hwnd))
     {
-        return -1;
+        return 1;
     }
 
     tesseract::TessBaseAPI ocr_eng = tesseract::TessBaseAPI();
@@ -262,6 +267,11 @@ int main()
 
     const string dateString = getStringTime();
     ofstream logFile("log_" + dateString + ".csv");
+    if (!logFile)
+    {
+        cerr << "Failed to create the log file.\n";
+        return 1;
+    }
 
     logFile << "ParamName1;ParamVal1;ParamName2;ParamVal2;ParamName3;ParamVal3\n";
 
@@ -289,20 +299,14 @@ int main()
             break;
         }
 
-        cv::cvtColor(screen, screen, COLOR_BGR2GRAY);
-        // cv::threshold(screen, screen, 40, 255, THRESH_BINARY_INV);
-        // cv::blur(screen, screen, Size(2, 2));
-
-        cv::GaussianBlur(screen, screen, cv::Size(1, 1), 0);
-        cv::threshold(screen, screen, 0, 255, cv::THRESH_BINARY_INV | cv::THRESH_OTSU);
-        // cv::adaptiveThreshold(screen, screen, 255,
-        //                     ADAPTIVE_THRESH_GAUSSIAN_C,
-        //                     THRESH_BINARY, 11, 2);
-
         auto recognizeImage = [&](const Rect &propNameRect, const Rect &propValueRect, const char *winName,
                                   pair<string, double> &result) -> bool {
-            Mat propNameImage = screen(propNameRect);
-            Mat propValueImage = screen(propValueRect);
+            Mat propNameImage;
+            Mat propValueImage;
+            cvtColor(screen(propNameRect), propNameImage, COLOR_BGR2GRAY);
+            cvtColor(screen(propValueRect), propValueImage, COLOR_BGR2GRAY);
+            threshold(propNameImage, propNameImage, 0, 255, THRESH_BINARY_INV | THRESH_OTSU);
+            threshold(propValueImage, propValueImage, 0, 255, THRESH_BINARY_INV | THRESH_OTSU);
 
             resize(propNameImage, propNameImage, Size(), 1.5, 1.5, INTER_CUBIC);
             resize(propValueImage, propValueImage, Size(), 2, 2, INTER_CUBIC);
@@ -310,7 +314,7 @@ int main()
             cv::morphologyEx(propNameImage, propNameImage, MORPH_OPEN, getStructuringElement(MORPH_RECT, Size(2, 2)));
 
             const auto decoded_props_name = blockToString(ocr_eng, propNameImage);
-            ocr_eng.SetVariable("tessedit_char_whitelist", "+%0123456789");
+            ocr_eng.SetVariable("tessedit_char_whitelist", "+%.,0123456789");
             const auto decoded_props_val = blockToString(ocr_eng, propValueImage);
             ocr_eng.SetVariable("tessedit_char_whitelist", "");
 
@@ -327,12 +331,15 @@ int main()
                 imshow(propValueWinName, propValueImage);
             }
             boost::algorithm::to_lower(result.first);
+            boost::algorithm::trim(result.first);
             boost::algorithm::to_lower(propValStr);
 
             cout << result.first << " " << propValStr << "\n";
 
-            propValStr.erase(std::remove_if(propValStr.begin(), propValStr.end(),
-                                            [](char c) { return !std::isdigit(static_cast<unsigned char>(c)); }),
+            std::replace(propValStr.begin(), propValStr.end(), ',', '.');
+            propValStr.erase(std::remove_if(propValStr.begin(), propValStr.end(), [](char c) {
+                                 return !std::isdigit(static_cast<unsigned char>(c)) && c != '.';
+                             }),
                              propValStr.end());
 
             bool ret = true;
@@ -343,7 +350,9 @@ int main()
             }
             try
             {
-                result.second = std::stof(propValStr);
+                std::size_t parsed = 0;
+                result.second = std::stod(propValStr, &parsed);
+                if (parsed != propValStr.size()) ret = false;
             }
             catch (...)
             {
@@ -359,7 +368,7 @@ int main()
         };
 
         cout << "New attempt\n \n";
-        ExpertiseConfigLoader::PropertySet props;
+        LifeStoneConfigLoader::PropertySet props{};
 
         bool result = true;
 

@@ -1,4 +1,5 @@
 #include "Tools.h"
+#include <algorithm>
 #include <boost/algorithm/string.hpp>
 #include <fstream>
 
@@ -38,22 +39,10 @@ class ColorDetector
 
     static ColorIndex detectColorIndex(const cv::Scalar &a)
     {
-        // pair<ColorIndex, double>  |  ColorIndex, color distance between a and
-        // Colors[ColorIndex]
-        auto cmp = [](const std::pair<ColorIndex, double> &a, const std::pair<ColorIndex, double> &b) {
-            return a.second < b.second;
-        };
-
-        std::set<std::pair<ColorIndex, double>, decltype(cmp)> colorIndexSet;
-
-        colorIndexSet.insert(
-            std::pair<ColorIndex, double>(ColorIndex::PURPLE, ColorDistance(colors[ColorIndex::PURPLE], a)));
-        colorIndexSet.insert(
-            std::pair<ColorIndex, double>(ColorIndex::GREEN, ColorDistance(colors[ColorIndex::GREEN], a)));
-        colorIndexSet.insert(
-            std::pair<ColorIndex, double>(ColorIndex::BLUE, ColorDistance(colors[ColorIndex::BLUE], a)));
-
-        return colorIndexSet.begin()->first;
+        const std::array distances = {ColorDistance(colors[PURPLE], a), ColorDistance(colors[GREEN], a),
+                                      ColorDistance(colors[BLUE], a)};
+        return static_cast<ColorIndex>(std::distance(distances.begin(),
+                                                     std::min_element(distances.begin(), distances.end())));
     }
 };
 
@@ -103,7 +92,7 @@ bool extractPropVal(const std::string &input, SquareProps &ret)
     std::string numberStr;
     for (char c : part2)
     {
-        if (std::isdigit(c))
+        if (std::isdigit(static_cast<unsigned char>(c)))
         {
             numberStr += c;
         }
@@ -166,15 +155,20 @@ bool getDesiredResultFromJson(const std::string &json,
             const int colorValue = color->second.get_value<int>();
             if (colorValue < ColorDetector::PURPLE || colorValue > ColorDetector::UNDEFINED) return false;
             std::get<0>(data[i]) = static_cast<ColorDetector::ColorIndex>(colorValue);
-            std::get<1>(data[i]) = propName->second.get_value<std::string>();
-            std::get<2>(data[i]) = val->second.get_value<int>();
+            auto propertyName = propName->second.get_value<std::string>();
+            boost::algorithm::trim(propertyName);
+            boost::algorithm::to_lower(propertyName);
+            const int minimumValue = val->second.get_value<int>();
+            if (minimumValue < 0) return false;
+            std::get<1>(data[i]) = std::move(propertyName);
+            std::get<2>(data[i]) = minimumValue;
         }
 
         ret.push_back(data);
         expertisParametrsIt = std::next(expertisParametrsIt, 1);
     }
 
-    return true;
+    return !r_charName.empty() && !ret.empty();
 }
 
 int main()
@@ -189,7 +183,7 @@ int main()
     if (!jsonSucc)
     {
         cout << "Couldn't read json file \n";
-        return -1;
+        return 1;
     }
     const wstring winPrefix = L"Lineage2M l "s;
     wstring charName_u16 = utf8_to_wstring(charName_u8);
@@ -202,14 +196,14 @@ int main()
     if (!hwnd)
     {
         std::cerr << "Window not found!" << std::endl;
-        return -1;
+        return 1;
     }
 
     ImageGetter imageGetter;
 
     if (!imageGetter.initialize(hwnd))
     {
-        return -1;
+        return 1;
     }
 
     const string dateString = getStringTime();
@@ -224,6 +218,11 @@ int main()
 
     Mat diamondPct = imread("diamond.jpg");
     const Rect diamondPlaceRect = {990, 801, 156, 32};
+    if (diamondPct.empty() || diamondPct.cols > diamondPlaceRect.width || diamondPct.rows > diamondPlaceRect.height)
+    {
+        cerr << "diamond.jpg is missing or larger than its matching area.\n";
+        return 1;
+    }
 
     while (1)
     {
