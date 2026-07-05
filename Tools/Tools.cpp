@@ -1,16 +1,16 @@
 #include "Tools.h"
+#include <cstring>
 #include <string>
 #include <thread>
 
-TimeMeasure::TimeMeasure(std::ostream &out, double *save) : m_out(out), m_save_diff(save)
+TimeMeasure::TimeMeasure(std::ostream &out, double *save) : m_save_diff(save), m_out(out)
 {
-    m_save_diff = save;
-    m_start = std::chrono::system_clock::now();
+    m_start = std::chrono::steady_clock::now();
 }
 
 TimeMeasure::~TimeMeasure()
 {
-    m_stop = std::chrono::system_clock::now();
+    m_stop = std::chrono::steady_clock::now();
     auto diff = m_stop - m_start;
     if (m_save_diff)
         *m_save_diff = std::chrono::duration_cast<std::chrono::microseconds>(diff).count();
@@ -36,6 +36,7 @@ void ImageGetter::reset() noexcept
     m_hwnd = nullptr;
     m_prevWidth = 0;
     m_prevHeight = 0;
+    m_pixelBuffer.clear();
 }
 
 bool ImageGetter::initialize(const char *windowTitle)
@@ -108,12 +109,13 @@ bool ImageGetter::updateSize()
     return true;
 }
 
-cv::Mat ImageGetter::HBitmapToMat(HBITMAP hBitmap)
+cv::Mat ImageGetter::bitmapToMat(HBITMAP hBitmap)
 {
-    BITMAP bmp;
-    BITMAPINFOHEADER bi;
+    BITMAP bmp{};
+    BITMAPINFOHEADER bi{};
 
-    GetObject(hBitmap, sizeof(BITMAP), &bmp);
+    if (!hBitmap || GetObject(hBitmap, sizeof(BITMAP), &bmp) == 0 || bmp.bmWidth <= 0 || bmp.bmHeight <= 0)
+        return {};
 
     bi.biSize = sizeof(BITMAPINFOHEADER);
     bi.biWidth = bmp.bmWidth;
@@ -127,25 +129,16 @@ cv::Mat ImageGetter::HBitmapToMat(HBITMAP hBitmap)
     bi.biClrUsed = 0;
     bi.biClrImportant = 0;
 
-    DWORD dwBmpSize = ((bmp.bmWidth * bi.biBitCount + 31) / 32) * 4 * bmp.bmHeight;
-    HANDLE hDIB = GlobalAlloc(GHND, dwBmpSize);
-    char *lpbitmap = (char *)GlobalLock(hDIB);
+    const std::size_t rowSize = (static_cast<std::size_t>(bmp.bmWidth) * bi.biBitCount + 31) / 32 * 4;
+    m_pixelBuffer.resize(rowSize * static_cast<std::size_t>(bmp.bmHeight));
+    const int lines = GetDIBits(m_hWindowDC, hBitmap, 0, static_cast<UINT>(bmp.bmHeight), m_pixelBuffer.data(),
+                                reinterpret_cast<BITMAPINFO *>(&bi), DIB_RGB_COLORS);
+    if (lines != bmp.bmHeight) return {};
 
-    HDC hdc = GetDC(NULL);
-    HDC hMemDC = CreateCompatibleDC(hdc);
-    SelectObject(hMemDC, hBitmap);
-
-    GetDIBits(hMemDC, hBitmap, 0, (UINT)bmp.bmHeight, lpbitmap, (BITMAPINFO *)&bi, DIB_RGB_COLORS);
-
-    cv::Mat mat(bmp.bmHeight, bmp.bmWidth, CV_8UC3, lpbitmap);
-    cv::Mat result;
-    mat.copyTo(result);
-
-    GlobalUnlock(hDIB);
-    GlobalFree(hDIB);
-    DeleteDC(hMemDC);
-    ReleaseDC(NULL, hdc);
-
+    cv::Mat result(bmp.bmHeight, bmp.bmWidth, CV_8UC3);
+    for (int row = 0; row < bmp.bmHeight; ++row)
+        std::memcpy(result.ptr(row), m_pixelBuffer.data() + static_cast<std::size_t>(row) * rowSize,
+                    static_cast<std::size_t>(bmp.bmWidth) * 3);
     return result;
 }
 
@@ -164,7 +157,7 @@ cv::Mat ImageGetter::captureImage()
                                m_rect.bottom - m_rect.top, m_hWindowDC, 0, 0, SRCCOPY);
     SelectObject(m_hMemDC, previous);
     if (!copied) return {};
-    return HBitmapToMat(m_hBitmap);
+    return bitmapToMat(m_hBitmap);
 }
 
 ConsoleEncodingSwitcher::ConsoleEncodingSwitcher(UINT newCP)
@@ -217,6 +210,11 @@ HWND handlePostMessageError(const char* phase) {
 
 void sendKeystroke(HWND hwnd, char key)
 {
+    if (!IsWindow(hwnd))
+    {
+        std::cerr << "sendKeystroke: invalid window handle.\n";
+        return;
+    }
     UINT scanCode = MapVirtualKey(key, MAPVK_VK_TO_VSC);
     LPARAM lParamDown = 1 | (scanCode << 16);
     LPARAM lParamUp = 1 | (scanCode << 16) | (1 << 30) | (1 << 31);
@@ -234,6 +232,17 @@ void sendKeystroke(HWND hwnd, char key)
         std::cerr << "PostMessage failed. Error: " << GetLastError() << std::endl;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(30)); // Задержка
+}
+
+void sendKeystroke(const std::wstring &windowTitle, char key)
+{
+    const HWND hwnd = FindWindowW(nullptr, windowTitle.c_str());
+    if (!hwnd)
+    {
+        std::cerr << "sendKeystroke: window not found.\n";
+        return;
+    }
+    sendKeystroke(hwnd, key);
 }
 
 // void sendKeystroke(HWND hwnd, char key)
@@ -455,7 +464,7 @@ void MoveMouseSendInput(HWND hwnd, int x, int y)
     int absY = pt.y * (65536 / GetSystemMetrics(SM_CYSCREEN));
 
     // Fill the INPUT structure
-    INPUT input = {0};
+    INPUT input{};
     input.type = INPUT_MOUSE;
     input.mi.dx = absX;
     input.mi.dy = absY;
@@ -491,14 +500,14 @@ void ClickMouseSendInput(HWND hwnd, int x, int y)
     int absY = pt.y * (65536 / GetSystemMetrics(SM_CYSCREEN));
 
     // Fill the INPUT structure for mouse down
-    INPUT inputDown = {0};
+    INPUT inputDown{};
     inputDown.type = INPUT_MOUSE;
     inputDown.mi.dx = absX;
     inputDown.mi.dy = absY;
     inputDown.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTDOWN;
 
     // Fill the INPUT structure for mouse up
-    INPUT inputUp = {0};
+    INPUT inputUp{};
     inputUp.type = INPUT_MOUSE;
     inputUp.mi.dx = absX;
     inputUp.mi.dy = absY;
@@ -561,8 +570,9 @@ void PrintWindowUnderCursorTitle() {
 
 std::string getStringTime()
 {
-    auto t = std::time(nullptr);
-    auto tm = *std::localtime(&t);
+    const auto t = std::time(nullptr);
+    std::tm tm{};
+    localtime_s(&tm, &t);
     std::ostringstream oss;
     oss << std::put_time(&tm, "%Y_%m_%d_%H_%M_%S");
     const std::string str = oss.str();
@@ -575,11 +585,12 @@ std::pair<std::string, int> blockToString(tesseract::TessBaseAPI &ocr, const cv:
     ocr.SetImage(img.data, img.cols, img.rows, img.elemSize1() * img.channels(), img.step);
 
     char *reconizedStringPtr = ocr.GetUTF8Text();
-    std::string reconizedString = std::string(reconizedStringPtr);
+    if (!reconizedStringPtr) return {{}, 0};
+    std::string reconizedString(reconizedStringPtr);
 
     int confidence = ocr.MeanTextConf();
 
-    if (reconizedString.size() > 0)
+    while (!reconizedString.empty() && (reconizedString.back() == '\n' || reconizedString.back() == '\r'))
         reconizedString.pop_back();
 
     delete[] reconizedStringPtr;

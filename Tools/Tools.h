@@ -17,8 +17,8 @@ public:
 private:
     double *m_save_diff = nullptr;
     std::ostream &m_out;
-    std::chrono::system_clock::time_point m_start;
-    std::chrono::system_clock::time_point m_stop;
+    std::chrono::steady_clock::time_point m_start;
+    std::chrono::steady_clock::time_point m_stop;
 };
 
 class ImageGetter
@@ -26,6 +26,10 @@ class ImageGetter
 public:
     ImageGetter(); // Default constructor
     ~ImageGetter();
+    ImageGetter(const ImageGetter &) = delete;
+    ImageGetter &operator=(const ImageGetter &) = delete;
+    ImageGetter(ImageGetter &&) = delete;
+    ImageGetter &operator=(ImageGetter &&) = delete;
     bool initialize(const char *windowTitle); // Initialize with window title
     bool initialize(HWND m_hwnd);             // Initialize with window title
     cv::Mat captureImage();                   // Capture image from the window
@@ -38,10 +42,11 @@ private:
     RECT m_rect;
     int m_prevWidth;
     int m_prevHeight;
+    std::vector<unsigned char> m_pixelBuffer;
 
     bool updateSize();                     // Update window size and bitmap if necessary
     void reset() noexcept;
-    cv::Mat HBitmapToMat(HBITMAP hBitmap); // Convert HBITMAP to cv::Mat
+    cv::Mat bitmapToMat(HBITMAP hBitmap);
 };
 
 class ConsoleEncodingSwitcher
