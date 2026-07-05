@@ -159,7 +159,7 @@ int main() {
             break;
         }
 
-        if (mbi.State == MEM_COMMIT && !(mbi.Protect & PAGE_NOACCESS) && !((mbi.Protect & PAGE_GUARD) == PAGE_GUARD) || 1) {
+        if (mbi.State == MEM_COMMIT && !(mbi.Protect & PAGE_NOACCESS) && !(mbi.Protect & PAGE_GUARD)) {
             if (ReadMemorySafely(hProcess, address, buffer.data(), buffer.size())) {
                 // std::cout << "Success: Memory read successfully at address: " << address << std::endl;
             }

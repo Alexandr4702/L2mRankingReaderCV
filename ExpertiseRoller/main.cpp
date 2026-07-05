@@ -65,9 +65,9 @@ const std::array<std::string, 4> ColorDetector::colorNames = {"PURPLE", "GREEN",
 
 struct SquareProps
 {
-    ColorDetector::ColorIndex colorIdx;
+    ColorDetector::ColorIndex colorIdx = ColorDetector::UNDEFINED;
     std::string propName;
-    int propVal;
+    int propVal = 0;
 };
 
 // Property rectangles row by row
@@ -85,13 +85,14 @@ std::vector<std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 
 
 bool extractPropVal(const std::string &input, SquareProps &ret)
 {
-    std::string part1, part2;
+    std::string part2;
     char delimiter = '+';
     size_t pos = input.find(delimiter);
 
     if (pos != std::string::npos)
     {
-        ret.propName = input.substr(0, pos - 1);
+        ret.propName = input.substr(0, pos);
+        boost::algorithm::trim(ret.propName);
         part2 = input.substr(pos + 1);
     }
     else
@@ -108,11 +109,8 @@ bool extractPropVal(const std::string &input, SquareProps &ret)
         }
     }
 
-    if (!numberStr.empty())
-    {
-        ret.propVal = std::stoi(numberStr);
-    }
-
+    if (numberStr.empty()) return false;
+    ret.propVal = std::stoi(numberStr);
     return true;
 }
 
@@ -120,6 +118,7 @@ bool getDesiredResultFromJson(const std::string &json,
                               std::vector<std::array<std::tuple<ColorDetector::ColorIndex, std::string, int>, 9>> &ret,
                               std::string &r_charName)
 {
+    ret.clear();
     pt::ptree SettingsTree;
 
     try
@@ -164,7 +163,9 @@ bool getDesiredResultFromJson(const std::string &json,
                 val == itCorner->second.not_found())
                 return false;
 
-            std::get<0>(data[i]) = static_cast<ColorDetector::ColorIndex>(color->second.get_value<int>());
+            const int colorValue = color->second.get_value<int>();
+            if (colorValue < ColorDetector::PURPLE || colorValue > ColorDetector::UNDEFINED) return false;
+            std::get<0>(data[i]) = static_cast<ColorDetector::ColorIndex>(colorValue);
             std::get<1>(data[i]) = propName->second.get_value<std::string>();
             std::get<2>(data[i]) = val->second.get_value<int>();
         }
@@ -215,7 +216,11 @@ int main()
     ofstream logFile(string("log_") + "_exp_roller_" + dateString + ".csv");
 
     tesseract::TessBaseAPI ocr_eng = tesseract::TessBaseAPI();
-    ocr_eng.Init("./", "eng", tesseract::OEM_LSTM_ONLY);
+    if (ocr_eng.Init("./", "eng", tesseract::OEM_LSTM_ONLY) != 0)
+    {
+        cerr << "Failed to initialize Tesseract (eng). Check tessdata in the working directory.\n";
+        return 1;
+    }
 
     Mat diamondPct = imread("diamond.jpg");
     const Rect diamondPlaceRect = {990, 801, 156, 32};
@@ -268,7 +273,7 @@ int main()
                 replace(propStr.begin(), propStr.end(), '\n', ' ');
                 boost::algorithm::to_lower(propStr);
 
-                extractPropVal(propStr, Props[i]);
+                if (!extractPropVal(propStr, Props[i])) recognitionSuccess = false;
 
                 // cout << ColorDetector::IdxToStr(Props[i].colorIdx) << " " << i << "
                 // ";

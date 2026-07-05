@@ -132,7 +132,7 @@ class ExpertiseConfigLoader
 
         if (auto charName = tree.get_optional<std::string>("charName"))
         {
-            result.characterName = utf8_to_wstring(*charName);
+            result.characterName = ::utf8_to_wstring(*charName);
         }
         else
         {
@@ -143,28 +143,26 @@ class ExpertiseConfigLoader
         {
             for (const auto &lsArray : *lifeStoneParams)
             {
-                PropertySet config;
+                PropertySet config{};
                 size_t i = 0;
 
                 for (const auto &prop : lsArray.second)
                 {
                     if (i >= 3)
                         break;
-                    config[i++] = {prop.second.get<std::string>("propeName", ""),
-                                   prop.second.get<double>("propVal", 0.0)};
+                    const auto name = prop.second.get_optional<std::string>("propertyName")
+                                          .value_or(prop.second.get<std::string>("propeName", ""));
+                    config[i++] = {name, prop.second.get<double>("propVal", 0.0)};
                 }
                 result.configurations.push_back(config);
             }
         }
 
+        if (result.configurations.empty())
+            throw std::runtime_error("'LifeStoneParametrs' must contain at least one configuration");
         return result;
     }
 
-    static std::wstring utf8_to_wstring(const std::string &str)
-    {
-        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-        return converter.from_bytes(str);
-    }
 };
 
 std::ostream &operator<<(std::ostream &os, const ExpertiseConfigLoader::PropertySet &props)
@@ -256,7 +254,11 @@ int main()
     }
 
     tesseract::TessBaseAPI ocr_eng = tesseract::TessBaseAPI();
-    ocr_eng.Init(TESSARACT_LOCATION.c_str(), "eng", tesseract::OEM_LSTM_ONLY);
+    if (ocr_eng.Init(TESSARACT_LOCATION.c_str(), "eng", tesseract::OEM_LSTM_ONLY) != 0)
+    {
+        cerr << "Failed to initialize Tesseract (eng). Check tessdata in the working directory.\n";
+        return 1;
+    }
 
     const string dateString = getStringTime();
     ofstream logFile("log_" + dateString + ".csv");

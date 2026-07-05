@@ -107,8 +107,8 @@ string getBoxWord(tesseract::TessBaseAPI *ocr, const Mat &im, const cv::Rect &ro
     Mat window = im(roi);
     ocr->SetImage(window.data, window.cols, window.rows, im.elemSize1() * im.channels(), im.step);
     char *word = ocr->GetUTF8Text();
-    string str = string(word);
-    str.pop_back();
+    string str = word ? string(word) : string{};
+    if (!str.empty() && str.back() == '\n') str.pop_back();
     delete[] word;
     return str;
 }
@@ -119,6 +119,7 @@ bool checkIfBoxContainWord(tesseract::TessBaseAPI *ocr, const Mat &im, const str
     Mat window = im(roi);
     ocr->SetImage(window.data, window.cols, window.rows, im.elemSize1() * im.channels(), im.step);
     const char *text = ocr->GetUTF8Text();
+    if (!text) return false;
     std::cout << text << "\n";
     bool ret = strncmp(text, str.c_str(), str.length()) == 0;
     delete[] text;
@@ -132,17 +133,7 @@ bool checkIfVertCrosses(const Rect &a, const Rect &b)
     int32_t b_min = b.y;
     int32_t b_max = b.y + b.height;
 
-    return (a_min <= b_max && b_min <= a_max);
-
-    return (a_min >= b_min && a_min <= b_max) ||
-           (a_max >= b_min && a_max <= b_max) ||
-
-           (b_min >= a_min && b_min <= a_max) ||
-           (b_max >= a_min && b_max <= a_max);
-
-    // return !(a_max < b_min || a_min > b_max);
-
-    // return (interval1.start >= interval2.start && end1 <= end2);
+    return a_min <= b_max && b_min <= a_max;
 }
 
 char readKeyPress()
