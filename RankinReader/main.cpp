@@ -4,8 +4,10 @@
 #include <tesseract/baseapi.h>
 
 #include <string>
+#include <array>
 #include <fstream>
 #include <format>
+#include <ranges>
 #include <unordered_map>
 #include <vector>
 
@@ -46,7 +48,7 @@ struct PersonProperties
 
 BITMAPINFOHEADER createBitmapHeader(int width, int height)
 {
-    BITMAPINFOHEADER bi;
+    BITMAPINFOHEADER bi{};
 
     // create a bitmap
     bi.biSize = sizeof(BITMAPINFOHEADER);
@@ -70,7 +72,13 @@ Mat captureScreenMat(HWND hwnd)
 
     // get handles to a device context (DC)
     HDC hwindowDC = GetDC(hwnd);
+    if (!hwindowDC) return {};
     HDC hwindowCompatibleDC = CreateCompatibleDC(hwindowDC);
+    if (!hwindowCompatibleDC)
+    {
+        ReleaseDC(hwnd, hwindowDC);
+        return {};
+    }
     SetStretchBltMode(hwindowCompatibleDC, COLORONCOLOR);
 
     // define scale, height and width
@@ -84,21 +92,29 @@ Mat captureScreenMat(HWND hwnd)
 
     // create a bitmap
     HBITMAP hbwindow = CreateCompatibleBitmap(hwindowDC, width, height);
+    if (!hbwindow)
+    {
+        DeleteDC(hwindowCompatibleDC);
+        ReleaseDC(hwnd, hwindowDC);
+        return {};
+    }
     BITMAPINFOHEADER bi = createBitmapHeader(width, height);
 
     // use the previously created device context with the bitmap
-    SelectObject(hwindowCompatibleDC, hbwindow);
+    const HGDIOBJ previous = SelectObject(hwindowCompatibleDC, hbwindow);
 
     // copy from the window device context to the bitmap device context
-    StretchBlt(hwindowCompatibleDC, 0, 0, width, height, hwindowDC, screenx, screeny, width, height, SRCCOPY); // change SRCCOPY to NOTSRCCOPY for wacky colors !
-    GetDIBits(hwindowCompatibleDC, hbwindow, 0, height, src.data, (BITMAPINFO *)&bi, DIB_RGB_COLORS);          // copy from hwindowCompatibleDC to hbwindow
+    const BOOL copied = StretchBlt(hwindowCompatibleDC, 0, 0, width, height, hwindowDC, screenx, screeny,
+                                   width, height, SRCCOPY);
+    const int lines = copied ? GetDIBits(hwindowCompatibleDC, hbwindow, 0, height, src.data,
+                                         reinterpret_cast<BITMAPINFO *>(&bi), DIB_RGB_COLORS) : 0;
 
-    // avoid memory leak
+    SelectObject(hwindowCompatibleDC, previous);
     DeleteObject(hbwindow);
     DeleteDC(hwindowCompatibleDC);
     ReleaseDC(hwnd, hwindowDC);
 
-    return src;
+    return lines == height ? src : Mat{};
 }
 
 string getBoxWord(tesseract::TessBaseAPI *ocr, const Mat &im, const cv::Rect &roi)
@@ -158,16 +174,24 @@ int main()
 
     const string RankingString = "Ranking";
 
-    tesseract::TessBaseAPI *ocr_eng = new tesseract::TessBaseAPI();
-    ocr_eng->Init("C:/msys64/mingw64/share/tessdata/", "eng", tesseract::OEM_LSTM_ONLY);
-
-    tesseract::TessBaseAPI *ocr_eng_rus = new tesseract::TessBaseAPI();
-    ocr_eng_rus->Init("C:/msys64/mingw64/share/tessdata/", "eng+rus", tesseract::OEM_LSTM_ONLY);
+    tesseract::TessBaseAPI ocr_eng;
+    tesseract::TessBaseAPI ocr_eng_rus;
+    if (ocr_eng.Init(nullptr, "eng", tesseract::OEM_LSTM_ONLY) != 0 ||
+        ocr_eng_rus.Init(nullptr, "eng+rus", tesseract::OEM_LSTM_ONLY) != 0)
+    {
+        cerr << "Failed to initialize Tesseract languages eng and rus.\n";
+        return 1;
+    }
 
     const string dateString = getStringTime();
 
     ofstream out_debug("./log_" + dateString + ".txt");
     ofstream out("./servers_list_" + dateString + ".txt");
+    if (!out_debug || !out)
+    {
+        cerr << "Failed to create output files.\n";
+        return 1;
+    }
 
     // Name, Rank, Clan, Alians
     unordered_map<string, PersonProperties> persons;
@@ -179,14 +203,29 @@ int main()
         TimeMeasure ms;
 
         Mat im = captureScreenMat(hwnd);
+        if (im.empty())
+        {
+            cerr << "Failed to capture the desktop.\n";
+            return 1;
+        }
+        const Rect imageBounds(0, 0, im.cols, im.rows);
+        const std::array requiredRegions = {RankingRoi, WindowNameRoi, ServerNameRoi, RankingRoiCurrentRank,
+                                            RankingRoiName, RankingRoiClan};
+        if (!std::ranges::all_of(requiredRegions, [&](const Rect &region) {
+                return (region & imageBounds) == region;
+            }))
+        {
+            cerr << "The desktop is too small for the configured recognition regions.\n";
+            return 1;
+        }
         cv::cvtColor(im, im, COLOR_BGR2GRAY);
         cv::threshold(im, im, 80, 255, THRESH_BINARY_INV);
 
         static bool imw = true;
 
-        if (checkIfBoxContainWord(ocr_eng, im, RankingString, WindowNameRoi))
+        if (checkIfBoxContainWord(&ocr_eng, im, RankingString, WindowNameRoi))
         {
-            string serverName = getBoxWord(ocr_eng, im, ServerNameRoi);
+            string serverName = getBoxWord(&ocr_eng, im, ServerNameRoi);
             cout << "serverName: " << serverName << "\n";
             {
                 Mat windowCurrentRanks = im(RankingRoiCurrentRank);
@@ -200,8 +239,12 @@ int main()
                 {
                     out_debug << Name << "\n";
                     ocr->SetPageSegMode(tesseract::PSM_AUTO);
-                    ocr->SetImage(window.data, window.cols, window.rows, im.elemSize1() * im.channels(), im.step);
-                    ocr->Recognize(0);
+                    ocr->SetImage(window.data, window.cols, window.rows, window.elemSize(), window.step);
+                    if (ocr->Recognize(nullptr) != 0)
+                    {
+                        out_debug << "OCR recognition failed for " << Name << '\n';
+                        return;
+                    }
                     tesseract::ResultIterator *ri = ocr->GetIterator();
                     tesseract::PageIteratorLevel level = tesseract::RIL_WORD;
 
@@ -232,9 +275,9 @@ int main()
                     }
                 };
 
-                handleWindow(ocr_eng, "Ranks---------", windowCurrentRanks, s_Ranks, 85);
-                handleWindow(ocr_eng_rus, "Names---------", windowNames, Names);
-                handleWindow(ocr_eng_rus, "Clans---------", windowClans, ClansAlians);
+                handleWindow(&ocr_eng, "Ranks---------", windowCurrentRanks, s_Ranks, 85);
+                handleWindow(&ocr_eng_rus, "Names---------", windowNames, Names);
+                handleWindow(&ocr_eng_rus, "Clans---------", windowClans, ClansAlians);
 
                 for (const auto &name : Names)
                 {
@@ -253,7 +296,7 @@ int main()
                     {
                         if (checkIfVertCrosses(name.box, clanAli.box))
                         {
-                            out_debug << format("name.box y1 {:5d} y2 {:5d} size {:5d} clanAli.box y1 {:5d} y2 {:5d} size {:5d} {}  {}  y1n-y1c: {:5d} ",
+                            out_debug << std::format("name.box y1 {:5d} y2 {:5d} size {:5d} clanAli.box y1 {:5d} y2 {:5d} size {:5d} {}  {}  y1n-y1c: {:5d} ",
                                                 name.box.y, name.box.y + name.box.height, name.box.height,
                                                 clanAli.box.y, clanAli.box.y + clanAli.box.height, clanAli.box.height,
                                                 name.str, clanAli.str, name.box.y - clanAli.box.y)
@@ -289,7 +332,7 @@ int main()
             }
         }
 
-        if (future_key.wait_for(chrono::system_clock::duration::min()) == future_status::ready)
+        if (future_key.wait_for(0ms) == future_status::ready)
         {
             cout << future_key.get() << "\n";
             break;
@@ -313,7 +356,7 @@ int main()
     out.close();
     out_debug.close();
 
-    ocr_eng->End();
-    ocr_eng_rus->End();
+    ocr_eng.End();
+    ocr_eng_rus.End();
     return 0;
 }
