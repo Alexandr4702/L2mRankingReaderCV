@@ -1,3 +1,11 @@
 build/
+build-*/
+.cache/
+*.rar
+*.exe
+*.dll
+*.log
+log_*.csv
+log_*.txt
 .vscode/
 servers_list_2024_02_22_21_47_30.txt
