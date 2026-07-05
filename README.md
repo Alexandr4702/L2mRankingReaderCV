@@ -7,7 +7,7 @@ Windows utilities built with OpenCV and Tesseract OCR.
 - `RankingReader` — reads ranking table data from the screen and writes it to a file.
 - `ExpertiseRoller` — recognizes nine expertise properties and checks them against configured combinations.
 - `LifeStoneRoller` — recognizes three life stone properties and checks them against configured combinations.
-- `GetImage` — captures a window image for debugging.
+- `GetImage` — captures a window image for debugging. Run it as `GetImage.exe <character-name>`.
 - `MemAnalysisTest` — experimental process-memory diagnostics.
 
 Shared window capture, OCR, and input helpers are located in `Tools`.

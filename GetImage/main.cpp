@@ -1,95 +1,44 @@
 #include <iostream>
+#include <string>
+
+#include <opencv2/opencv.hpp>
 
 #include "Tools.h"
 
-void sendMouseClick(HWND hwnd, int x, int y) {
-  LPARAM lParam = MAKELPARAM(x, y);
-
-  PostMessage(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, lParam);
-  PostMessage(hwnd, WM_LBUTTONUP, 0, lParam);
-}
-
-void sendMouseMove(HWND hwnd, int x, int y) {
-  LPARAM lParam = MAKELPARAM(x, y);
-
-  PostMessage(hwnd, WM_MOUSEMOVE, 0, lParam);
-}
-
-void GetClientCoordinates(HWND hwnd, int &x, int &y) {
-  POINT pt = {x, y};
-  ScreenToClient(hwnd, &pt);
-  x = pt.x;
-  y = pt.y;
-}
-
-void SendMouseInput(int x, int y, bool click = false) {
-  INPUT input = {0};
-
-  input.type = INPUT_MOUSE;
-  input.mi.dx = (x * 65535) / GetSystemMetrics(SM_CXSCREEN);
-  input.mi.dy = (y * 65535) / GetSystemMetrics(SM_CYSCREEN);
-  input.mi.dwFlags = MOUSEEVENTF_MOVE;
-  SendInput(1, &input, sizeof(INPUT));
-
-  if (click) {
-    input.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-    SendInput(1, &input, sizeof(INPUT));
-
-    input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
-    SendInput(1, &input, sizeof(INPUT));
-  }
-}
-
-HWND hwndLast = NULL;
-
-void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG, LONG,
-                           DWORD, DWORD) {
-  if (event == EVENT_SYSTEM_FOREGROUND) {
-    if (hwnd != hwndLast) {
-      hwndLast = hwnd;
-      wchar_t title[256];
-      GetWindowTextW(hwnd, title, sizeof(title) / sizeof(title[0]));
-      std::wcout << L"Active window changed to: " << title << std::endl;
+int main(int argc, char **argv)
+{
+    if (argc != 2)
+    {
+        std::cerr << "Usage: GetImage <character-name>\n";
+        return 1;
     }
-  }
-}
 
-int main() {
-  using namespace cv;
-  using namespace std;
+    const std::wstring characterName = utf8_to_wstring(argv[1]);
+    if (characterName.empty())
+    {
+        std::cerr << "Character name must be valid UTF-8.\n";
+        return 1;
+    }
 
-  const wstring winPrefix = L"Lineage2M l "s;
-  wstring charName_u16 = L"ВсемПривет"s;
-  wstring windowTitle = winPrefix + charName_u16;
-  HWND hwnd = FindWindowW(NULL, windowTitle.c_str());
-  std::cout << hwnd << std::endl;
+    const std::wstring windowTitle = L"Lineage2M l " + characterName;
+    const HWND hwnd = FindWindowW(nullptr, windowTitle.c_str());
+    if (!hwnd)
+    {
+        std::cerr << "Window not found.\n";
+        return 1;
+    }
 
-  // while(1)
-  // {
-  //     sendKeystroke(hwnd, 'Y');
-  //     Sleep(500);
-  //     sendKeystroke(hwnd, 'Y');
-  //     Sleep(1500);
-  // }
+    ImageGetter imageGetter;
+    if (!imageGetter.initialize(hwnd)) return 1;
 
-  ImageGetter imageGetter;
+    const cv::Mat image = imageGetter.captureImage();
+    if (image.empty())
+    {
+        std::cerr << "Failed to capture image.\n";
+        return 1;
+    }
 
-  if (!hwnd) {
-    std::cerr << "Window not found!" << std::endl;
-    return false;
-  }
-
-  if (!imageGetter.initialize(hwnd)) {
-    return -1;
-  }
-
-  cv::Mat mat = imageGetter.captureImage();
-  if (mat.empty()) {
-    std::cerr << "Failed to capture image!" << std::endl;
-  }
-
-  imshow("Image", mat);
-  waitKey(0);
-
-  return 0;
+    cv::imshow("Captured image", image);
+    cv::waitKey(0);
+    return 0;
 }

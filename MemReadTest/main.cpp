@@ -100,18 +100,17 @@ bool ReadMemorySafely(HANDLE processHandle, LPCVOID address, LPVOID buffer, SIZE
         return false;
     }
 
-    bool skip_check = true;
-    if ((mbi.State != MEM_COMMIT) && skip_check) {
+    if (mbi.State != MEM_COMMIT) {
         std::cerr << "Skipped: Memory region is not committed (MEM_COMMIT) at address: " << address << std::endl;
         return false;
     }
 
-    if ((mbi.Protect & PAGE_NOACCESS) && skip_check) {
+    if (mbi.Protect & PAGE_NOACCESS) {
         std::cerr << "Skipped: Memory region is protected (PAGE_NOACCESS) at address: " << address << std::endl;
         return false;
     }
 
-    if ((mbi.Protect & PAGE_GUARD) && skip_check) {
+    if (mbi.Protect & PAGE_GUARD) {
         std::cerr << "Skipped: Memory region is protected (PAGE_GUARD) at address: " << address << std::endl;
         return false;
     }
@@ -132,7 +131,8 @@ int main() {
     
     HWND hwnd = FindWindowW(nullptr, windowsName.c_str());
     if (!hwnd) {
-        throw std::runtime_error("Failed to find process window");
+        std::cerr << "Failed to find process window\n";
+        return 1;
     }
 
     DWORD processId;
@@ -160,7 +160,8 @@ int main() {
         }
 
         if (mbi.State == MEM_COMMIT && !(mbi.Protect & PAGE_NOACCESS) && !(mbi.Protect & PAGE_GUARD)) {
-            if (ReadMemorySafely(hProcess, address, buffer.data(), buffer.size())) {
+            const SIZE_T readSize = std::min<SIZE_T>(buffer.size(), mbi.RegionSize);
+            if (ReadMemorySafely(hProcess, address, buffer.data(), readSize)) {
                 // std::cout << "Success: Memory read successfully at address: " << address << std::endl;
             }
         } else {
