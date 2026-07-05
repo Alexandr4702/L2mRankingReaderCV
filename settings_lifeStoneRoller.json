@@ -1,0 +1,9 @@
+{
+    "_comment": "HUD - 100 resolution 1920x1120",
+    "charName":"OrbFighter",
+    "LifeStoneParametrs":[
+        [{"propeName":"defense", "propVal": 1}, {"propeName":"defense", "propVal": 1}, {"propeName":"", "propVal": 0}],
+        [{"propeName":"defense", "propVal": 2}, {"propeName":"", "propVal": 0}, {"propeName":"", "propVal": 0}],
+        [{"propeName":"", "propVal": 0}, {"propeName":"defense", "propVal": 2}, {"propeName":"", "propVal": 0}]
+    ]
+}

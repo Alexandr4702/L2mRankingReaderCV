@@ -1,6 +1,6 @@
 {
     "_comment": "PURPLE - 0, GREEN - 1, BLUE - 2, UNDEFINED - 3; Resolution 1600x900; ",
-    "charName":"KanunJarrus",
+    "charName":"OrbFighter",
     "expertisParametrs":[
 
         {"UpLeft"   : {"color": 2,"propertyName": "weapon damage boost", "val": 4}},
