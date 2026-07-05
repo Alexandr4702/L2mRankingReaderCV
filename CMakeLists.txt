@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-find_package(OpenCV REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs highgui)
 find_path(TESSERACT_INCLUDE_DIR tesseract/baseapi.h)
 find_library(TESSERACT_LIBRARY NAMES tesseract libtesseract)
 if(NOT TESSERACT_INCLUDE_DIR OR NOT TESSERACT_LIBRARY)
@@ -23,14 +23,20 @@ target_include_directories(l2m_common PUBLIC
 )
 target_link_libraries(l2m_common PUBLIC ${OpenCV_LIBS} ${TESSERACT_LIBRARY} gdi32 psapi)
 
-function(add_l2m_tool target source)
-    add_executable(${target} ${source})
-    target_link_libraries(${target} PRIVATE l2m_common)
+function(enable_project_warnings target)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /permissive-)
     else()
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
     endif()
+endfunction()
+
+enable_project_warnings(l2m_common)
+
+function(add_l2m_tool target source)
+    add_executable(${target} ${source})
+    target_link_libraries(${target} PRIVATE l2m_common)
+    enable_project_warnings(${target})
     add_custom_command(TARGET ${target} POST_BUILD
         COMMAND ${CMAKE_COMMAND}
             -DEXECUTABLE=$<TARGET_FILE:${target}>
@@ -52,6 +58,7 @@ add_executable(MemAnalysisTest
     Memory-Hacking-Class/Memory.cpp
 )
 target_link_libraries(MemAnalysisTest PRIVATE l2m_common)
+enable_project_warnings(MemAnalysisTest)
 add_custom_command(TARGET MemAnalysisTest POST_BUILD
     COMMAND ${CMAKE_COMMAND}
         -DEXECUTABLE=$<TARGET_FILE:MemAnalysisTest>
