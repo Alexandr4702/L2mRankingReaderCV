@@ -2,7 +2,7 @@
 #include <string>
 #include <thread>
 
-TimeMeasure::TimeMeasure(const std::ostream &out, double *save) : m_out(out), m_save_diff(save)
+TimeMeasure::TimeMeasure(std::ostream &out, double *save) : m_out(out), m_save_diff(save)
 {
     m_save_diff = save;
     m_start = std::chrono::system_clock::now();
@@ -14,7 +14,7 @@ TimeMeasure::~TimeMeasure()
     auto diff = m_stop - m_start;
     if (m_save_diff)
         *m_save_diff = std::chrono::duration_cast<std::chrono::microseconds>(diff).count();
-    std::cout << "Time in microsec: " << std::chrono::duration_cast<std::chrono::microseconds>(diff).count() << std::endl;
+    m_out << "Time in microsec: " << std::chrono::duration_cast<std::chrono::microseconds>(diff).count() << std::endl;
 }
 
 ImageGetter::ImageGetter()
@@ -22,18 +22,20 @@ ImageGetter::ImageGetter()
 
 ImageGetter::~ImageGetter()
 {
-    if (m_hBitmap)
-    {
-        DeleteObject(m_hBitmap);
-    }
-    if (m_hMemDC)
-    {
-        DeleteDC(m_hMemDC);
-    }
-    if (m_hWindowDC)
-    {
-        ReleaseDC(m_hwnd, m_hWindowDC);
-    }
+    reset();
+}
+
+void ImageGetter::reset() noexcept
+{
+    if (m_hBitmap) DeleteObject(m_hBitmap);
+    if (m_hMemDC) DeleteDC(m_hMemDC);
+    if (m_hWindowDC) ReleaseDC(m_hwnd, m_hWindowDC);
+    m_hBitmap = nullptr;
+    m_hMemDC = nullptr;
+    m_hWindowDC = nullptr;
+    m_hwnd = nullptr;
+    m_prevWidth = 0;
+    m_prevHeight = 0;
 }
 
 bool ImageGetter::initialize(const char *windowTitle)
@@ -50,6 +52,12 @@ bool ImageGetter::initialize(const char *windowTitle)
 
 bool ImageGetter::initialize(HWND hwnd)
 {
+    reset();
+    if (!IsWindow(hwnd))
+    {
+        std::cerr << "Invalid window handle!" << std::endl;
+        return false;
+    }
     m_hwnd = hwnd;
 
     m_hWindowDC = GetDC(m_hwnd);
@@ -59,53 +67,45 @@ bool ImageGetter::initialize(HWND hwnd)
         return false;
     }
 
-    updateSize(); // Initialize window size and bitmap
-
     m_hMemDC = CreateCompatibleDC(m_hWindowDC);
     if (!m_hMemDC)
     {
-        ReleaseDC(m_hwnd, m_hWindowDC);
+        reset();
         std::cerr << "Failed to create memory DC!" << std::endl;
         return false;
     }
 
-    m_hBitmap = CreateCompatibleBitmap(m_hWindowDC, m_rect.right - m_rect.left, m_rect.bottom - m_rect.top);
-    if (!m_hBitmap)
+    if (!updateSize())
     {
-        DeleteDC(m_hMemDC);
-        ReleaseDC(m_hwnd, m_hWindowDC);
-        std::cerr << "Failed to create bitmap!" << std::endl;
+        reset();
         return false;
     }
 
     return true;
 }
 
-void ImageGetter::updateSize()
+bool ImageGetter::updateSize()
 {
-    GetClientRect(m_hwnd, &m_rect);
+    if (!GetClientRect(m_hwnd, &m_rect)) return false;
 
     int newWidth = m_rect.right - m_rect.left;
     int newHeight = m_rect.bottom - m_rect.top;
 
-    // Recreate the bitmap only if the size has changed
+    if (newWidth <= 0 || newHeight <= 0) return false;
     if (newWidth != m_prevWidth || newHeight != m_prevHeight)
     {
-        if (m_hBitmap)
-        {
-            DeleteObject(m_hBitmap);
-        }
-
-        m_hBitmap = CreateCompatibleBitmap(m_hWindowDC, newWidth, newHeight);
-        if (!m_hBitmap)
+        HBITMAP newBitmap = CreateCompatibleBitmap(m_hWindowDC, newWidth, newHeight);
+        if (!newBitmap)
         {
             std::cerr << "Failed to create new bitmap!" << std::endl;
-            return;
+            return false;
         }
-
+        if (m_hBitmap) DeleteObject(m_hBitmap);
+        m_hBitmap = newBitmap;
         m_prevWidth = newWidth;
         m_prevHeight = newHeight;
     }
+    return true;
 }
 
 cv::Mat ImageGetter::HBitmapToMat(HBITMAP hBitmap)
@@ -157,10 +157,13 @@ cv::Mat ImageGetter::captureImage()
         return cv::Mat();
     }
 
-    updateSize(); // Update size before capturing
+    if (!updateSize()) return {};
 
-    SelectObject(m_hMemDC, m_hBitmap);
-    BitBlt(m_hMemDC, 0, 0, m_rect.right - m_rect.left, m_rect.bottom - m_rect.top, m_hWindowDC, 0, 0, SRCCOPY);
+    const HGDIOBJ previous = SelectObject(m_hMemDC, m_hBitmap);
+    const BOOL copied = BitBlt(m_hMemDC, 0, 0, m_rect.right - m_rect.left,
+                               m_rect.bottom - m_rect.top, m_hWindowDC, 0, 0, SRCCOPY);
+    SelectObject(m_hMemDC, previous);
+    if (!copied) return {};
     return HBitmapToMat(m_hBitmap);
 }
 
@@ -435,6 +438,9 @@ bool SendKeyToWindow(HWND hwnd, WPARAM character)
 
     // // Отправляем сообщение отпускания клавиши
     // SendMessage(hwnd, WM_KEYUP, vkCode, lParam);
+    (void)hwnd;
+    (void)character;
+    return false;
 }
 
 // Function to move the mouse using SendInput relative to the window

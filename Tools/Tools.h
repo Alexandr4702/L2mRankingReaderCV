@@ -8,18 +8,15 @@
 #include <opencv2/opencv.hpp>
 #include <tesseract/baseapi.h>
 
-#include <locale>
-#include <codecvt>
-
 class TimeMeasure
 {
 public:
-    TimeMeasure(const std::ostream &out = std::cout, double *save = nullptr);
+    TimeMeasure(std::ostream &out = std::cout, double *save = nullptr);
     ~TimeMeasure();
 
 private:
     double *m_save_diff = nullptr;
-    const std::ostream &m_out;
+    std::ostream &m_out;
     std::chrono::system_clock::time_point m_start;
     std::chrono::system_clock::time_point m_stop;
 };
@@ -42,7 +39,8 @@ private:
     int m_prevWidth;
     int m_prevHeight;
 
-    void updateSize();                     // Update window size and bitmap if necessary
+    bool updateSize();                     // Update window size and bitmap if necessary
+    void reset() noexcept;
     cv::Mat HBitmapToMat(HBITMAP hBitmap); // Convert HBITMAP to cv::Mat
 };
 
@@ -106,8 +104,14 @@ std::string getStringTime();
 std::pair<std::string, int> blockToString(tesseract::TessBaseAPI &ocr, const cv::Mat &img);
 
 inline std::wstring utf8_to_wstring(const std::string& utf8_str) {
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-    return converter.from_bytes(utf8_str);
+    if (utf8_str.empty()) return {};
+    const int size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8_str.data(),
+                                         static_cast<int>(utf8_str.size()), nullptr, 0);
+    if (size == 0) return {};
+    std::wstring result(static_cast<std::size_t>(size), L'\0');
+    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8_str.data(),
+                        static_cast<int>(utf8_str.size()), result.data(), size);
+    return result;
 }
 
 #endif //TOOLS_H_
